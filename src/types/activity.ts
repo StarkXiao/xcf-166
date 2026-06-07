@@ -167,18 +167,18 @@ export interface ActivityStatistics {
   averageDuration: number
 }
 
+export type TrackEventType = 'exposure' | 'click' | 'claim' | 'complete' | 'view' | 'error'
+
 export interface ActivityLog {
   id: string
   activityId: string
   playerId: string
-  eventType: 'view' | 'click' | 'claim' | 'complete' | 'error'
+  eventType: TrackEventType
   elementId?: string
   rewardId?: string
   metadata: Record<string, any>
   timestamp: number
 }
-
-export type TrackEventType = 'exposure' | 'click' | 'claim' | 'complete' | 'view' | 'error'
 
 export interface ActivityEvent {
   id: string

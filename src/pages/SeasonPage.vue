@@ -2,6 +2,8 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSeasonStore } from '@/stores/seasonStore'
+import { useActivityStore } from '@/stores/activityStore'
+import { useCharacterStore } from '@/stores/characterStore'
 import { Trophy, ListTodo, TrendingUp, Gift, ArrowLeft } from 'lucide-vue-next'
 import SeasonCenter from '@/components/season/SeasonCenter.vue'
 import TaskList from '@/components/season/TaskList.vue'
@@ -12,6 +14,8 @@ import RewardCenter from '@/components/season/RewardCenter.vue'
 const route = useRoute()
 const router = useRouter()
 const seasonStore = useSeasonStore()
+const activityStore = useActivityStore()
+const characterStore = useCharacterStore()
 
 const activeTab = ref('center')
 
@@ -23,13 +27,24 @@ const tabs = [
   { id: 'leaderboard', label: '排行榜', icon: Trophy },
 ]
 
+const SEASON_ACTIVITY_ID = 'act_001'
+
+function getPlayerId(): string {
+  return characterStore.character?.id || 'player_local'
+}
+
 onMounted(() => {
-  seasonStore.initSeason()
+  seasonStore.initSeason(getPlayerId())
   const tab = route.query.tab as string
   if (tab && tabs.some((t) => t.id === tab)) {
     activeTab.value = tab
   }
   seasonStore.startAutoCheck(1000)
+
+  activityStore.trackExposure(SEASON_ACTIVITY_ID, getPlayerId(), {
+    page: 'season_center',
+    source: route.query.source || 'direct',
+  })
 })
 
 onUnmounted(() => {
@@ -39,6 +54,10 @@ onUnmounted(() => {
 function switchTab(tabId: string) {
   activeTab.value = tabId
   router.replace({ query: { tab: tabId } })
+
+  activityStore.trackClick(SEASON_ACTIVITY_ID, getPlayerId(), `tab_${tabId}`, {
+    tabName: tabs.find(t => t.id === tabId)?.label,
+  })
 }
 
 function goBack() {

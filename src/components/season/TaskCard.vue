@@ -2,6 +2,8 @@
 import { computed, ref } from 'vue'
 import type { SeasonTask, TaskProgress } from '@/types/season'
 import { useSeasonStore } from '@/stores/seasonStore'
+import { useActivityStore } from '@/stores/activityStore'
+import { useCharacterStore } from '@/stores/characterStore'
 import { getRewardById } from '@/game/data/seasonRewards'
 import {
   Sparkles,
@@ -28,7 +30,15 @@ const props = defineProps<{
 }>()
 
 const seasonStore = useSeasonStore()
+const activityStore = useActivityStore()
+const characterStore = useCharacterStore()
 const isClaiming = ref(false)
+
+const SEASON_ACTIVITY_ID = 'act_001'
+
+function getPlayerId(): string {
+  return characterStore.character?.id || 'player_local'
+}
 
 const iconMap: Record<string, any> = {
   Sparkles,
@@ -73,6 +83,13 @@ const rarityColors: Record<string, string> = {
 
 async function handleClaim() {
   if (isClaiming.value || !isCompleted.value || isClaimed.value) return
+
+  activityStore.trackClick(SEASON_ACTIVITY_ID, getPlayerId(), `task_claim_${props.task.id}`, {
+    taskTitle: props.task.title,
+    taskType: props.task.type,
+    expReward: props.task.expReward,
+    hasExtraReward: !!props.task.rewardId,
+  })
 
   isClaiming.value = true
   await new Promise((resolve) => setTimeout(resolve, 500))

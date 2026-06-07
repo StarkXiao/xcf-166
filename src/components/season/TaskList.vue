@@ -1,10 +1,20 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useSeasonStore } from '@/stores/seasonStore'
+import { useActivityStore } from '@/stores/activityStore'
+import { useCharacterStore } from '@/stores/characterStore'
 import TaskCard from './TaskCard.vue'
 import { ListTodo, Calendar, Trophy, Target } from 'lucide-vue-next'
 
 const seasonStore = useSeasonStore()
+const activityStore = useActivityStore()
+const characterStore = useCharacterStore()
+
+const SEASON_ACTIVITY_ID = 'act_001'
+
+function getPlayerId(): string {
+  return characterStore.character?.id || 'player_local'
+}
 
 const activeTab = ref<'daily' | 'weekly' | 'challenge'>('daily')
 
@@ -13,6 +23,13 @@ const tabs = [
   { id: 'weekly' as const, label: '每周任务', icon: ListTodo, description: '每周一0点重置' },
   { id: 'challenge' as const, label: '赛季挑战', icon: Trophy, description: '赛季内完成' },
 ]
+
+function switchTab(tabId: 'daily' | 'weekly' | 'challenge') {
+  activeTab.value = tabId
+  activityStore.trackClick(SEASON_ACTIVITY_ID, getPlayerId(), `task_tab_${tabId}`, {
+    tabName: tabs.find(t => t.id === tabId)?.label,
+  })
+}
 
 function getTasksForTab(tab: 'daily' | 'weekly' | 'challenge') {
   switch (tab) {
@@ -53,7 +70,7 @@ function getProgressForTab(tab: 'daily' | 'weekly' | 'challenge') {
       <button
         v-for="tab in tabs"
         :key="tab.id"
-        @click="activeTab = tab.id"
+        @click="switchTab(tab.id)"
         class="task-tab relative p-5 rounded-2xl text-left transition-all duration-300"
         :class="{
           'bg-gradient-to-br from-purple-900/50 to-red-900/30 border-2 border-purple-500/50 shadow-lg shadow-purple-500/10':

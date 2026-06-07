@@ -21,6 +21,9 @@ import {
   mockLeaderboard,
   rankRewardTiers,
 } from '@/game/data/seasonRewards'
+import { useActivityStore } from '@/stores/activityStore'
+
+const SEASON_ACTIVITY_ID = 'act_001'
 
 const STORAGE_KEY = 'season_center_data'
 
@@ -470,6 +473,14 @@ export const useSeasonStore = defineStore('season', () => {
       currentSettlement.value.claimedAt = Date.now()
     }
 
+    const activityStore = useActivityStore()
+    activityStore.trackClaim(SEASON_ACTIVITY_ID, playerSeason.value?.playerId || 'unknown', rewardId, {
+      rewardType: 'rank',
+      rewardName: reward.name,
+      rewardRarity: reward.rarity,
+      finalRank: currentSettlement.value.finalRank,
+    })
+
     saveToStorage()
     return true
   }
@@ -533,6 +544,7 @@ export const useSeasonStore = defineStore('season', () => {
     if (!isSeasonActive.value) return
 
     let hasChanges = false
+    const completedTasks: string[] = []
 
     tasks.value.forEach((task) => {
       if (task.condition.type !== conditionType) return
@@ -553,11 +565,25 @@ export const useSeasonStore = defineStore('season', () => {
       if (newProgress >= task.target && !progress.completed) {
         progress.completed = true
         progress.completedAt = Date.now()
+        completedTasks.push(task.id)
       }
 
       taskProgressMap.value.set(task.id, progress)
       hasChanges = true
     })
+
+    if (completedTasks.length > 0) {
+      const activityStore = useActivityStore()
+      completedTasks.forEach((taskId) => {
+        const task = tasks.value.find((t) => t.id === taskId)
+        activityStore.trackComplete(SEASON_ACTIVITY_ID, playerSeason.value?.playerId || 'unknown', {
+          taskId,
+          taskTitle: task?.title,
+          taskType: task?.type,
+          expReward: task?.expReward,
+        })
+      })
+    }
 
     if (hasChanges) {
       saveToStorage()
@@ -588,6 +614,14 @@ export const useSeasonStore = defineStore('season', () => {
       rewardRecords.value.push(record)
     }
 
+    const activityStore = useActivityStore()
+    activityStore.trackClaim(SEASON_ACTIVITY_ID, playerSeason.value?.playerId || 'unknown', task.rewardId, {
+      rewardType: 'task',
+      taskId,
+      taskTitle: task.title,
+      expReward: task.expReward,
+    })
+
     saveToStorage()
     return true
   }
@@ -608,6 +642,14 @@ export const useSeasonStore = defineStore('season', () => {
       claimedAt: Date.now(),
     }
     rewardRecords.value.push(record)
+
+    const activityStore = useActivityStore()
+    activityStore.trackClaim(SEASON_ACTIVITY_ID, playerSeason.value.playerId, reward.id, {
+      rewardType: 'level',
+      level,
+      rewardName: reward.name,
+      rewardRarity: reward.rarity,
+    })
 
     saveToStorage()
     return true

@@ -228,6 +228,7 @@ export const useActivityStore = defineStore('activity', () => {
     const activity = activities.value.find(a => a.id === id)
     if (!activity) return
 
+    const oldStatus = activity.status
     activity.status = status
     activity.updatedAt = Date.now()
 
@@ -245,7 +246,7 @@ export const useActivityStore = defineStore('activity', () => {
       activityId: id,
       playerId: 'admin',
       eventType: 'view',
-      metadata: { action: 'status_change', oldStatus: activity.status, newStatus: status },
+      metadata: { action: 'status_change', oldStatus, newStatus: status },
     })
   }
 
@@ -341,6 +342,13 @@ export const useActivityStore = defineStore('activity', () => {
       userAgent: navigator.userAgent,
       metadata,
     })
+
+    addLog({
+      activityId,
+      playerId,
+      eventType: 'exposure',
+      metadata,
+    })
   }
 
   function trackClick(activityId: string, playerId: string, elementId: string, metadata: Record<string, any> = {}) {
@@ -351,6 +359,14 @@ export const useActivityStore = defineStore('activity', () => {
       elementId,
       pageUrl: window.location.href,
       userAgent: navigator.userAgent,
+      metadata,
+    })
+
+    addLog({
+      activityId,
+      playerId,
+      eventType: 'click',
+      elementId,
       metadata,
     })
   }

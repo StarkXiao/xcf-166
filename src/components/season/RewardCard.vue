@@ -2,6 +2,8 @@
 import { ref } from 'vue'
 import type { SeasonReward } from '@/types/season'
 import { useSeasonStore } from '@/stores/seasonStore'
+import { useActivityStore } from '@/stores/activityStore'
+import { useCharacterStore } from '@/stores/characterStore'
 import { Gift, Coins, Crown, Medal, Palette, Award, Scroll, Sparkles, Moon, Star, Check } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -11,8 +13,16 @@ const props = defineProps<{
 }>()
 
 const seasonStore = useSeasonStore()
+const activityStore = useActivityStore()
+const characterStore = useCharacterStore()
 const isClaiming = ref(false)
 const isClaimed = ref(seasonStore.isRewardClaimed(props.reward.id))
+
+const SEASON_ACTIVITY_ID = 'act_001'
+
+function getPlayerId(): string {
+  return characterStore.character?.id || 'player_local'
+}
 
 const iconMap: Record<string, any> = {
   Gift,
@@ -63,6 +73,12 @@ const rarityTextColors: Record<string, string> = {
 
 async function handleClaim() {
   if (!props.canClaim || isClaiming.value || isClaimed.value) return
+
+  activityStore.trackClick(SEASON_ACTIVITY_ID, getPlayerId(), `reward_claim_${props.reward.id}`, {
+    rewardName: props.reward.name,
+    rewardType: props.source,
+    rewardRarity: props.reward.rarity,
+  })
 
   isClaiming.value = true
   await new Promise((resolve) => setTimeout(resolve, 500))
