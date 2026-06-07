@@ -37,7 +37,7 @@ const isClaiming = ref(false)
 const SEASON_ACTIVITY_ID = 'act_001'
 
 function getPlayerId(): string {
-  return characterStore.character?.id || 'player_local'
+  return characterStore.activeCharacter?.id || 'player_local'
 }
 
 const iconMap: Record<string, any> = {
