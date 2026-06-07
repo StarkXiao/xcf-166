@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import GamePage from '@/pages/GamePage.vue'
 import SeasonPage from '@/pages/SeasonPage.vue'
+import CharacterPage from '@/pages/CharacterPage.vue'
 
 const routes = [
   {
@@ -12,6 +13,11 @@ const routes = [
     path: '/season',
     name: 'season',
     component: SeasonPage,
+  },
+  {
+    path: '/character',
+    name: 'character',
+    component: CharacterPage,
   },
 ]
 

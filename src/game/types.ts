@@ -1,3 +1,5 @@
+import type { CharacterSaveData } from './characterTypes'
+
 export type TimePhase = 'day' | 'night'
 
 export type OrderStatus = 'pending' | 'accepted' | 'completed' | 'failed'
@@ -90,6 +92,7 @@ export interface SaveData {
   currentEvent: GameEvent | null
   eventHistory: GameEvent[]
   eventResultMessage: string | null
+  characterData: CharacterSaveData | null
   timestamp: number
   version: string
 }

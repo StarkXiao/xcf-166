@@ -4,9 +4,10 @@ import type { GameStats, TimePhase, SaveData } from '../game/types'
 import { useOrderStore } from './orderStore'
 import { useEventStore } from './eventStore'
 import { useSeasonStore } from './seasonStore'
+import { useCharacterStore } from './characterStore'
 
 const SAVE_KEY = 'b2_morgue_save'
-const SAVE_VERSION = '2.0.0'
+const SAVE_VERSION = '2.1.0'
 
 export const useGameStore = defineStore('game', () => {
   const timePhase = ref<TimePhase>('day')
@@ -97,7 +98,14 @@ export const useGameStore = defineStore('game', () => {
       timePhase.value = 'day'
       day.value++
       stats.value.day = day.value
-      stats.value.sanity = Math.min(stats.value.maxSanity, stats.value.sanity + 10)
+
+      const characterStore = useCharacterStore()
+      const sanityRecovery = 10 + Math.floor(characterStore.getAttributeValue('sanity') / 20)
+      stats.value.sanity = Math.min(stats.value.maxSanity, stats.value.sanity + sanityRecovery)
+
+      characterStore.reduceCooldowns()
+      characterStore.checkUnlockConditions()
+
       const seasonStore = useSeasonStore()
       seasonStore.updateTaskProgress('day_pass', 1)
     }
@@ -106,6 +114,11 @@ export const useGameStore = defineStore('game', () => {
   function completeOrder() {
     stats.value.totalOrdersCompleted++
     stats.value.totalRelicsProcessed++
+
+    const characterStore = useCharacterStore()
+    characterStore.addExp(50 + stats.value.totalOrdersCompleted * 5)
+    characterStore.checkUnlockConditions()
+
     const seasonStore = useSeasonStore()
     seasonStore.updateTaskProgress('order_complete', 1)
     seasonStore.updateTaskProgress('relic_purify', 1)
@@ -125,6 +138,9 @@ export const useGameStore = defineStore('game', () => {
   function saveGame(): SaveData {
     const orderStore = useOrderStore()
     const eventStore = useEventStore()
+    const characterStore = useCharacterStore()
+
+    const characterData = characterStore.saveCharacters()
 
     const saveData: SaveData = {
       stats: { ...stats.value },
@@ -140,6 +156,7 @@ export const useGameStore = defineStore('game', () => {
       currentEvent: JSON.parse(JSON.stringify(eventStore.currentEvent)),
       eventHistory: JSON.parse(JSON.stringify(eventStore.eventHistory)),
       eventResultMessage: eventStore.eventResultMessage,
+      characterData,
       timestamp: Date.now(),
       version: SAVE_VERSION
     }
@@ -163,6 +180,12 @@ export const useGameStore = defineStore('game', () => {
       currentProcessingStep.value = data.isProcessing ? data.currentProcessingStep : null
       processingProgress.value = data.isProcessing ? data.processingProgress : 0
       gameStarted.value = true
+
+      if (data.characterData) {
+        const characterStore = useCharacterStore()
+        characterStore.loadCharacters()
+      }
+
       return data
     } catch {
       console.error('存档读取失败')
@@ -176,6 +199,9 @@ export const useGameStore = defineStore('game', () => {
 
   function deleteSave() {
     localStorage.removeItem(SAVE_KEY)
+    const characterStore = useCharacterStore()
+    characterStore.deleteCharacterSave()
+    characterStore.resetCharacters()
   }
 
   return {

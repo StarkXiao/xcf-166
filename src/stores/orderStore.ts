@@ -4,6 +4,7 @@ import type { Order, Relic, OrderWithRelic } from '../game/types'
 import { getInitialOrders } from '../game/data/relics'
 import { useGameStore } from './gameStore'
 import { useSeasonStore } from './seasonStore'
+import { useCharacterStore } from './characterStore'
 
 export const useOrderStore = defineStore('order', () => {
   const gameStore = useGameStore()
@@ -56,8 +57,12 @@ export const useOrderStore = defineStore('order', () => {
     const orderData = acceptedOrders.value[idx]
     orderData.order.status = 'completed'
 
-    gameStore.addMoney(orderData.order.reward)
-    gameStore.addReputation(orderData.order.reputationReward)
+    const characterStore = useCharacterStore()
+    const adjustedReward = characterStore.calculateReward(orderData.order.reward)
+    const adjustedReputation = characterStore.calculateReward(orderData.order.reputationReward)
+
+    gameStore.addMoney(adjustedReward)
+    gameStore.addReputation(adjustedReputation)
     gameStore.completeOrder()
 
     acceptedOrders.value.splice(idx, 1)

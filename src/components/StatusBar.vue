@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/gameStore'
 import { useOrderStore } from '@/stores/orderStore'
 import { useEventStore } from '@/stores/eventStore'
+import { useCharacterStore } from '@/stores/characterStore'
 import { audioManager } from '@/game/audio'
 
+const router = useRouter()
 const gameStore = useGameStore()
 const orderStore = useOrderStore()
 const eventStore = useEventStore()
+const characterStore = useCharacterStore()
 
 const isMuted = ref(false)
 const showSaveMenu = ref(false)
@@ -68,6 +72,17 @@ async function initAudio() {
   audioManager.startAmbient()
 }
 
+function goToCharacter() {
+  audioManager.playClick()
+  router.push('/character')
+}
+
+function handleGoToCharacter() {
+  audioManager.playClick()
+  showSaveMenu.value = false
+  router.push('/character')
+}
+
 const phaseButtonText = () => {
   if (gameStore.timePhase === 'day') {
     return '🌙 进入夜晚'
@@ -123,6 +138,18 @@ const phaseButtonText = () => {
         </div>
 
         <button
+          @click="goToCharacter"
+          class="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded text-sm font-medium text-white transition-colors"
+          :disabled="gameStore.isProcessing"
+          :class="{ 'opacity-50 cursor-not-allowed': gameStore.isProcessing }"
+          title="角色养成"
+        >
+          <span>🎭</span>
+          <span class="hidden sm:inline">{{ characterStore.activeCharacter?.name }}</span>
+          <span class="text-xs text-purple-200">Lv.{{ characterStore.activeCharacter?.level }}</span>
+        </button>
+
+        <button
           @click="togglePhase"
           class="px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded text-sm font-medium text-white transition-colors"
           :disabled="gameStore.isProcessing"
@@ -150,6 +177,12 @@ const phaseButtonText = () => {
                 class="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-gray-700 transition-colors"
               >
                 💾 保存游戏
+              </button>
+              <button
+                @click="handleGoToCharacter"
+                class="w-full px-4 py-2 text-left text-sm text-purple-400 hover:bg-purple-900/30 transition-colors"
+              >
+                🎭 角色养成
               </button>
               <button
                 @click="handleRestart"

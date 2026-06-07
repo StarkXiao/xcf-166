@@ -3,12 +3,14 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useOrderStore } from '@/stores/orderStore'
 import { useGameStore } from '@/stores/gameStore'
 import { useEventStore } from '@/stores/eventStore'
+import { useCharacterStore } from '@/stores/characterStore'
 import { audioManager } from '@/game/audio'
 import type { Relic, ProcessingStep } from '@/game/types'
 
 const orderStore = useOrderStore()
 const gameStore = useGameStore()
 const eventStore = useEventStore()
+const characterStore = useCharacterStore()
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const animationId = ref<number | null>(null)
@@ -540,12 +542,16 @@ async function startProcessing(startProgressOrEvent?: number | Event) {
   gameStore.setProcessing(step.id, startProgress)
   audioStopFn = audioManager.playProcessing(step.type)
 
-  const duration = step.duration
+  const baseDuration = step.duration
+  const duration = characterStore.calculateProcessingSpeed(baseDuration)
   const adjustedStart = startProgress / 100 * duration
   const startTime = Date.now() - adjustedStart
 
   if (startProgress === 0) {
-    eventStore.triggerProcessingAnomaly()
+    const anomalyChance = characterStore.calculateAnomalyResistance(0.3)
+    if (Math.random() < anomalyChance) {
+      eventStore.triggerProcessingAnomaly()
+    }
   }
 
   const tick = () => {
@@ -579,12 +585,14 @@ function completeStep(orderId: string, stepId: string) {
   }
 
   orderStore.updateStepProgress(orderId, stepId, true)
-  gameStore.addSanity(-2)
+  const sanityCost = characterStore.calculateSanityCost(2)
+  gameStore.addSanity(-sanityCost)
   audioManager.playSuccess()
 
   gameStore.setProcessing(null, 0)
 
-  if (Math.random() < 0.2) {
+  const anomalyChance = characterStore.calculateAnomalyResistance(0.2)
+  if (Math.random() < anomalyChance) {
     eventStore.triggerRandomAnomaly()
   }
 }

@@ -1,0 +1,103 @@
+export type CharacterRarity = 'common' | 'rare' | 'epic' | 'legendary'
+
+export type AttributeType = 'sanity' | 'reputation' | 'money' | 'efficiency' | 'luck'
+
+export type SkillType = 'passive' | 'active' | 'combat'
+
+export interface CharacterAttribute {
+  type: AttributeType
+  name: string
+  value: number
+  description: string
+  icon: string
+}
+
+export interface CharacterSkill {
+  id: string
+  name: string
+  description: string
+  type: SkillType
+  icon: string
+  level: number
+  maxLevel: number
+  unlocked: boolean
+  cooldown: number
+  currentCooldown: number
+  effect: {
+    attribute?: AttributeType
+    value?: number
+    duration?: number
+    special?: string
+  }
+  upgradeCost: ResourceCost
+}
+
+export interface ResourceCost {
+  money?: number
+  reputation?: number
+  exp?: number
+  specialItems?: Array<{ id: string; name: string; amount: number }>
+}
+
+export interface Character {
+  id: string
+  name: string
+  title: string
+  description: string
+  story: string
+  rarity: CharacterRarity
+  icon: string
+  unlocked: boolean
+  unlockCondition: {
+    type: 'money' | 'reputation' | 'day' | 'order_complete' | 'special'
+    value: number
+    description: string
+  }
+  level: number
+  maxLevel: number
+  exp: number
+  expToNextLevel: number
+  baseAttributes: CharacterAttribute[]
+  currentAttributes: CharacterAttribute[]
+  skills: CharacterSkill[]
+  equippedSkillId: string | null
+  combatBonus: CombatBonus
+}
+
+export interface CombatBonus {
+  processingSpeed: number
+  sanityProtection: number
+  rewardMultiplier: number
+  anomalyResistance: number
+  successRateBonus: number
+}
+
+export interface LevelUpResult {
+  success: boolean
+  newLevel?: number
+  newAttributes?: CharacterAttribute[]
+  unlockedSkill?: CharacterSkill
+  message: string
+}
+
+export interface CharacterSaveData {
+  characters: Array<{
+    id: string
+    unlocked: boolean
+    level: number
+    exp: number
+    skills: Array<{
+      id: string
+      level: number
+      unlocked: boolean
+      currentCooldown: number
+    }>
+    equippedSkillId: string | null
+  }>
+  activeCharacterId: string | null
+  totalExp: number
+  totalSpent: {
+    money: number
+    reputation: number
+  }
+}

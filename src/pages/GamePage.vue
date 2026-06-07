@@ -4,6 +4,7 @@ import { useGameStore } from '@/stores/gameStore'
 import { useOrderStore } from '@/stores/orderStore'
 import { useEventStore } from '@/stores/eventStore'
 import { useSeasonStore } from '@/stores/seasonStore'
+import { useCharacterStore } from '@/stores/characterStore'
 import { audioManager } from '@/game/audio'
 import StatusBar from '@/components/StatusBar.vue'
 import OrderPanel from '@/components/OrderPanel.vue'
@@ -15,6 +16,7 @@ const gameStore = useGameStore()
 const orderStore = useOrderStore()
 const eventStore = useEventStore()
 const seasonStore = useSeasonStore()
+const characterStore = useCharacterStore()
 
 const showStartScreen = ref(true)
 const hasExistingSave = ref(false)
@@ -26,9 +28,11 @@ function handleNewGame() {
   })
   orderStore.clearAllOrders()
   eventStore.clearAllEvents()
+  characterStore.resetCharacters()
   gameStore.startGame()
   orderStore.generateNewOrders(1)
   eventStore.queueIntroEvents()
+  characterStore.checkUnlockConditions()
   showStartScreen.value = false
 }
 
@@ -52,6 +56,7 @@ function handleContinue() {
       eventHistory: saveData.eventHistory,
       eventResultMessage: saveData.eventResultMessage
     })
+    characterStore.checkUnlockConditions()
     showStartScreen.value = false
   }
 }
