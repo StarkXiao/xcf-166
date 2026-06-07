@@ -536,6 +536,15 @@ async function startProcessing(startProgressOrEvent?: number | Event) {
   if (!step || !currentOrder.value) return
   if (gameStore.isProcessing && !isPausedProcessing.value) return
 
+  if (characterStore.triggerCompleteStep) {
+    const consumed = characterStore.consumeCompleteStepTrigger()
+    if (consumed) {
+      gameStore.setProcessing(step.id, 0)
+      completeStep(currentOrder.value.order.id, step.id)
+      return
+    }
+  }
+
   audioManager.playClick()
   const orderId = currentOrder.value.order.id
 
@@ -639,6 +648,13 @@ onMounted(() => {
     }
   }
   animationId.value = requestAnimationFrame(render)
+
+  if (characterStore.triggerCompleteStep && gameStore.isProcessing && currentOrder.value && currentProcessingStep.value) {
+    const consumed = characterStore.consumeCompleteStepTrigger()
+    if (consumed) {
+      completeStep(currentOrder.value.order.id, currentProcessingStep.value.id)
+    }
+  }
 })
 
 onUnmounted(() => {
