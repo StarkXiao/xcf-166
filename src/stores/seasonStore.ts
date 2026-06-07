@@ -263,7 +263,16 @@ export const useSeasonStore = defineStore('season', () => {
 
   function loadCurrentSeason() {
     const season = getCurrentSeason()
-    if (season) {
+    if (!season) return
+
+    const savedData = loadFromStorage()
+    if (savedData && savedData.currentSeasonState && savedData.currentSeasonState.id === season.id) {
+      currentSeason.value = {
+        ...season,
+        status: savedData.currentSeasonState.status,
+        endTime: savedData.currentSeasonState.endTime,
+      }
+    } else {
       currentSeason.value = season
     }
   }
@@ -347,6 +356,11 @@ export const useSeasonStore = defineStore('season', () => {
   }
 
   function loadLeaderboard() {
+    if (frozenLeaderboard.value) {
+      leaderboard.value = frozenLeaderboard.value
+      return
+    }
+
     leaderboard.value = [...mockLeaderboard]
 
     if (playerSeason.value) {
@@ -639,6 +653,7 @@ export const useSeasonStore = defineStore('season', () => {
 
   function checkAndResetTasks() {
     if (!playerSeason.value) return
+    if (currentSeason.value?.status === 'settled') return
 
     const now = Date.now()
     const oneDay = 24 * 60 * 60 * 1000
@@ -711,6 +726,13 @@ export const useSeasonStore = defineStore('season', () => {
         version: '1.0',
         timestamp: Date.now(),
         currentSeasonId: currentSeason.value?.id,
+        currentSeasonState: currentSeason.value
+          ? {
+              id: currentSeason.value.id,
+              status: currentSeason.value.status,
+              endTime: currentSeason.value.endTime,
+            }
+          : null,
         playerSeasons: playerSeason.value ? [playerSeason.value] : [],
         taskProgresses: Array.from(taskProgressMap.value.values()),
         rewardRecords: rewardRecords.value,

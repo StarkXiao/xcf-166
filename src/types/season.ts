@@ -141,10 +141,17 @@ export interface Countdown {
   seconds: number
 }
 
+export interface SeasonState {
+  id: string
+  status: SeasonStatus
+  endTime: number
+}
+
 export interface SeasonSaveData {
   version: string
   timestamp: number
   currentSeasonId: string
+  currentSeasonState: SeasonState | null
   playerSeasons: PlayerSeason[]
   taskProgresses: TaskProgress[]
   rewardRecords: RewardRecord[]
