@@ -71,12 +71,25 @@ export interface GameStats {
   totalRelicsProcessed: number
 }
 
+export interface OrderWithRelic {
+  order: Order
+  relic: Relic
+}
+
 export interface SaveData {
   stats: GameStats
-  orders: Order[]
   timePhase: TimePhase
   day: number
-  currentEventId: string | null
+  isProcessing: boolean
+  currentProcessingStep: string | null
+  processingProgress: number
+  pendingOrders: OrderWithRelic[]
+  acceptedOrders: OrderWithRelic[]
+  currentOrderId: string | null
+  eventQueue: GameEvent[]
+  currentEvent: GameEvent | null
+  eventHistory: GameEvent[]
+  eventResultMessage: string | null
   timestamp: number
   version: string
 }

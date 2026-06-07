@@ -21,6 +21,8 @@ function handleNewGame() {
   audioManager.init().then(() => {
     audioManager.startAmbient()
   })
+  orderStore.clearAllOrders()
+  eventStore.clearAllEvents()
   gameStore.startGame()
   orderStore.generateNewOrders(1)
   eventStore.queueIntroEvents()
@@ -34,7 +36,19 @@ function handleContinue() {
   })
   const saveData = gameStore.loadGame()
   if (saveData) {
-    orderStore.generateNewOrders(gameStore.day)
+    orderStore.clearAllOrders()
+    eventStore.clearAllEvents()
+    orderStore.restoreFromSave(
+      saveData.pendingOrders,
+      saveData.acceptedOrders,
+      saveData.currentOrderId
+    )
+    eventStore.restoreFromSave({
+      eventQueue: saveData.eventQueue,
+      currentEvent: saveData.currentEvent,
+      eventHistory: saveData.eventHistory,
+      eventResultMessage: saveData.eventResultMessage
+    })
     showStartScreen.value = false
   }
 }
@@ -42,6 +56,8 @@ function handleContinue() {
 function handleGameOverRestart() {
   audioManager.playClick()
   gameStore.deleteSave()
+  orderStore.clearAllOrders()
+  eventStore.clearAllEvents()
   gameStore.resetGame()
   orderStore.generateNewOrders(1)
   eventStore.queueIntroEvents()

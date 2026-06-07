@@ -4,6 +4,13 @@ import type { GameEvent } from '../game/types'
 import { narrativeEvents, getRandomAnomalyEvent, getRandomChoiceEvent, getDayEndEvent } from '../game/data/events'
 import { useGameStore } from './gameStore'
 
+export interface EventSaveData {
+  eventQueue: GameEvent[]
+  currentEvent: GameEvent | null
+  eventHistory: GameEvent[]
+  eventResultMessage: string | null
+}
+
 export const useEventStore = defineStore('event', () => {
   const gameStore = useGameStore()
   const eventQueue = ref<GameEvent[]>([])
@@ -108,6 +115,17 @@ export const useEventStore = defineStore('event', () => {
     eventResultMessage.value = null
   }
 
+  function restoreFromSave(data: EventSaveData) {
+    eventQueue.value = data.eventQueue.map(e => ({ ...e }))
+    currentEvent.value = data.currentEvent ? { ...data.currentEvent } : null
+    eventHistory.value = data.eventHistory.map(e => ({ ...e }))
+    eventResultMessage.value = data.eventResultMessage
+  }
+
+  function hasPendingEvents() {
+    return eventQueue.value.length > 0 || currentEvent.value !== null
+  }
+
   return {
     eventQueue,
     currentEvent,
@@ -124,6 +142,8 @@ export const useEventStore = defineStore('event', () => {
     triggerRandomChoice,
     triggerDayEndEvent,
     triggerProcessingAnomaly,
-    clearAllEvents
+    clearAllEvents,
+    restoreFromSave,
+    hasPendingEvents
   }
 })

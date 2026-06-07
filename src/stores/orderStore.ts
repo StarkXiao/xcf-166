@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Order, Relic } from '../game/types'
+import type { Order, Relic, OrderWithRelic } from '../game/types'
 import { getInitialOrders } from '../game/data/relics'
 import { useGameStore } from './gameStore'
 
@@ -110,6 +110,30 @@ export const useOrderStore = defineStore('order', () => {
     return acceptedOrders.value.length
   }
 
+  function restoreFromSave(pending: OrderWithRelic[], accepted: OrderWithRelic[], currentId: string | null) {
+    pendingOrders.value = pending.map(item => ({
+      order: { ...item.order },
+      relic: {
+        ...item.relic,
+        processingSteps: item.relic.processingSteps.map(s => ({ ...s }))
+      }
+    }))
+    acceptedOrders.value = accepted.map(item => ({
+      order: { ...item.order },
+      relic: {
+        ...item.relic,
+        processingSteps: item.relic.processingSteps.map(s => ({ ...s }))
+      }
+    }))
+    currentOrderId.value = currentId
+  }
+
+  function clearAllOrders() {
+    pendingOrders.value = []
+    acceptedOrders.value = []
+    currentOrderId.value = null
+  }
+
   return {
     pendingOrders,
     acceptedOrders,
@@ -127,6 +151,8 @@ export const useOrderStore = defineStore('order', () => {
     resetSteps,
     clearPendingOrders,
     hasAcceptedOrders,
-    getAcceptedCount
+    getAcceptedCount,
+    restoreFromSave,
+    clearAllOrders
   }
 })

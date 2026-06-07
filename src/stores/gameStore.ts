@@ -1,9 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { GameStats, TimePhase, SaveData } from '../game/types'
+import { useOrderStore } from './orderStore'
+import { useEventStore } from './eventStore'
 
 const SAVE_KEY = 'b2_morgue_save'
-const SAVE_VERSION = '1.0.0'
+const SAVE_VERSION = '2.0.0'
 
 export const useGameStore = defineStore('game', () => {
   const timePhase = ref<TimePhase>('day')
@@ -105,12 +107,23 @@ export const useGameStore = defineStore('game', () => {
   }
 
   function saveGame(): SaveData {
+    const orderStore = useOrderStore()
+    const eventStore = useEventStore()
+
     const saveData: SaveData = {
       stats: { ...stats.value },
-      orders: [],
       timePhase: timePhase.value,
       day: day.value,
-      currentEventId: null,
+      isProcessing: isProcessing.value,
+      currentProcessingStep: currentProcessingStep.value,
+      processingProgress: processingProgress.value,
+      pendingOrders: JSON.parse(JSON.stringify(orderStore.pendingOrders)),
+      acceptedOrders: JSON.parse(JSON.stringify(orderStore.acceptedOrders)),
+      currentOrderId: orderStore.currentOrderId,
+      eventQueue: JSON.parse(JSON.stringify(eventStore.eventQueue)),
+      currentEvent: JSON.parse(JSON.stringify(eventStore.currentEvent)),
+      eventHistory: JSON.parse(JSON.stringify(eventStore.eventHistory)),
+      eventResultMessage: eventStore.eventResultMessage,
       timestamp: Date.now(),
       version: SAVE_VERSION
     }
@@ -130,6 +143,9 @@ export const useGameStore = defineStore('game', () => {
       stats.value = { ...data.stats }
       timePhase.value = data.timePhase
       day.value = data.day
+      isProcessing.value = false
+      currentProcessingStep.value = null
+      processingProgress.value = 0
       gameStarted.value = true
       return data
     } catch {
