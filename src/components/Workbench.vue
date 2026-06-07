@@ -653,6 +653,15 @@ onUnmounted(() => {
   }
 })
 
+watch(() => characterStore.triggerCompleteStep, (shouldComplete) => {
+  if (shouldComplete && gameStore.isProcessing && currentOrder.value && currentProcessingStep.value) {
+    const consumed = characterStore.consumeCompleteStepTrigger()
+    if (consumed) {
+      completeStep(currentOrder.value.order.id, currentProcessingStep.value.id)
+    }
+  }
+})
+
 watch(() => gameStore.isLowSanity, (isLow) => {
   if (isLow) {
     audioManager.playHeartbeat()

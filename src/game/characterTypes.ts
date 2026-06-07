@@ -118,4 +118,5 @@ export interface CharacterSaveData {
   pendingAnomalyImmunity: boolean
   currentOrderRewardMultiplier: number
   doubleAllRemainingDays: number
+  isInvincible: boolean
 }

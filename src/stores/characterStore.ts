@@ -26,6 +26,7 @@ export const useCharacterStore = defineStore('character', () => {
   const currentOrderRewardMultiplier = ref(1.0)
   const doubleAllRemainingDays = ref(0)
   const isInvincible = ref(false)
+  const triggerCompleteStep = ref(false)
 
   const activeCharacter = computed(() => {
     return characters.value.find(c => c.id === activeCharacterId.value) || null
@@ -360,6 +361,7 @@ export const useCharacterStore = defineStore('character', () => {
         return { success: true, message: '当前订单将获得3倍报酬和声望', newLevel: 0 }
 
       case 'complete_step':
+        triggerCompleteStep.value = true
         skill.currentCooldown = skill.cooldown
         return { success: true, message: '立即完成当前处理步骤', newLevel: 0 }
 
@@ -476,6 +478,14 @@ export const useCharacterStore = defineStore('character', () => {
     return false
   }
 
+  function consumeCompleteStepTrigger(): boolean {
+    if (triggerCompleteStep.value) {
+      triggerCompleteStep.value = false
+      return true
+    }
+    return false
+  }
+
   function getAndResetRewardMultiplier(): number {
     const multiplier = currentOrderRewardMultiplier.value
     currentOrderRewardMultiplier.value = 1.0
@@ -571,6 +581,7 @@ export const useCharacterStore = defineStore('character', () => {
     pendingAnomalyImmunity.value = saveData.pendingAnomalyImmunity || false
     currentOrderRewardMultiplier.value = saveData.currentOrderRewardMultiplier || 1.0
     doubleAllRemainingDays.value = saveData.doubleAllRemainingDays || 0
+    isInvincible.value = saveData.isInvincible || false
   }
 
   function getSaveData(): CharacterSaveData {
@@ -595,7 +606,8 @@ export const useCharacterStore = defineStore('character', () => {
       pendingPerfectComplete: pendingPerfectComplete.value,
       pendingAnomalyImmunity: pendingAnomalyImmunity.value,
       currentOrderRewardMultiplier: currentOrderRewardMultiplier.value,
-      doubleAllRemainingDays: doubleAllRemainingDays.value
+      doubleAllRemainingDays: doubleAllRemainingDays.value,
+      isInvincible: isInvincible.value
     }
   }
 
@@ -617,6 +629,7 @@ export const useCharacterStore = defineStore('character', () => {
     currentOrderRewardMultiplier.value = 1.0
     doubleAllRemainingDays.value = 0
     isInvincible.value = false
+    triggerCompleteStep.value = false
   }
 
   return {
@@ -634,6 +647,7 @@ export const useCharacterStore = defineStore('character', () => {
     currentOrderRewardMultiplier,
     doubleAllRemainingDays,
     isInvincible,
+    triggerCompleteStep,
     totalExp,
     totalSpent,
     totalCombatBonus,
@@ -650,6 +664,7 @@ export const useCharacterStore = defineStore('character', () => {
     useEquippedSkill,
     consumeAnomalyImmunity,
     consumePerfectComplete,
+    consumeCompleteStepTrigger,
     getAndResetRewardMultiplier,
     reduceCooldowns,
     calculateProcessingSpeed,
