@@ -24,6 +24,13 @@ const nextStep = computed<ProcessingStep | null>(() => {
   return currentSteps.value.find(s => !s.completed) || null
 })
 const allStepsCompleted = computed(() => currentSteps.value.length > 0 && currentSteps.value.every(s => s.completed))
+const currentProcessingStep = computed<ProcessingStep | null>(() => {
+  if (!gameStore.currentProcessingStep) return null
+  return currentSteps.value.find(s => s.id === gameStore.currentProcessingStep) || null
+})
+const isPausedProcessing = computed(() => {
+  return gameStore.isProcessing && gameStore.currentProcessingStep && gameStore.processingProgress > 0 && gameStore.processingProgress < 100
+})
 
 const stepIcon: Record<string, string> = {
   clean: '🧼',
@@ -515,20 +522,31 @@ function render(time: number) {
 let processingTimer: number | null = null
 let audioStopFn: (() => void) | null = null
 
-async function startProcessing() {
-  if (!nextStep.value || !currentOrder.value || gameStore.isProcessing) return
+async function startProcessing(startProgressOrEvent?: number | Event) {
+  let startProgress = 0
+  if (typeof startProgressOrEvent === 'number') {
+    startProgress = startProgressOrEvent
+  } else if (typeof startProgressOrEvent === 'object' && startProgressOrEvent !== null) {
+    startProgress = 0
+  }
+
+  const step = isPausedProcessing.value ? currentProcessingStep.value : nextStep.value
+  if (!step || !currentOrder.value) return
+  if (gameStore.isProcessing && !isPausedProcessing.value) return
 
   audioManager.playClick()
-  const step = nextStep.value
   const orderId = currentOrder.value.order.id
 
-  gameStore.setProcessing(step.id, 0)
+  gameStore.setProcessing(step.id, startProgress)
   audioStopFn = audioManager.playProcessing(step.type)
 
   const duration = step.duration
-  const startTime = Date.now()
+  const adjustedStart = startProgress / 100 * duration
+  const startTime = Date.now() - adjustedStart
 
-  eventStore.triggerProcessingAnomaly()
+  if (startProgress === 0) {
+    eventStore.triggerProcessingAnomaly()
+  }
 
   const tick = () => {
     const elapsed = Date.now() - startTime
@@ -543,6 +561,11 @@ async function startProcessing() {
   }
 
   tick()
+}
+
+function resumeProcessing() {
+  if (!isPausedProcessing.value) return
+  startProcessing(gameStore.processingProgress)
 }
 
 function completeStep(orderId: string, stepId: string) {
@@ -586,7 +609,10 @@ function handleMouseMove(e: MouseEvent) {
 }
 
 function handleCanvasClick() {
-  if (!gameStore.isProcessing && nextStep.value && gameStore.timePhase === 'night') {
+  if (gameStore.timePhase !== 'night') return
+  if (isPausedProcessing.value) {
+    resumeProcessing()
+  } else if (!gameStore.isProcessing && nextStep.value) {
     startProcessing()
   }
 }
@@ -629,7 +655,7 @@ watch(() => gameStore.isLowSanity, (isLow) => {
       <div>
         <h2 class="text-xl font-bold text-amber-400">🔨 工作台</h2>
         <p class="text-xs text-gray-500 mt-1">
-          {{ gameStore.timePhase === 'day' ? '白天无法处理遗物，请等待夜晚' : '点击工作台开始处理' }}
+          {{ gameStore.timePhase === 'day' ? '白天无法处理遗物，请等待夜晚' : isPausedProcessing ? '处理已暂停，点击继续' : '点击工作台开始处理' }}
         </p>
       </div>
       <div v-if="gameStore.isNight" class="flex gap-2">
@@ -670,7 +696,7 @@ watch(() => gameStore.isLowSanity, (isLow) => {
                 {{ step.name }}
               </span>
               <span class="text-xs text-gray-500">
-                {{ step.completed ? '已完成' : gameStore.currentProcessingStep === step.id ? '处理中...' : '待处理' }}
+                {{ step.completed ? '已完成' : gameStore.currentProcessingStep === step.id ? (isPausedProcessing ? '已暂停' : '处理中...') : '待处理' }}
               </span>
             </div>
             <div class="text-xs text-gray-500 mt-1">{{ step.description }}</div>
@@ -680,7 +706,14 @@ watch(() => gameStore.isLowSanity, (isLow) => {
       </div>
 
       <button
-        v-if="nextStep && !gameStore.isProcessing && gameStore.isNight"
+        v-if="isPausedProcessing && currentProcessingStep && gameStore.isNight"
+        @click="resumeProcessing"
+        class="mt-4 w-full py-3 bg-amber-600 hover:bg-amber-500 rounded text-sm font-medium text-white transition-colors"
+      >
+        ⏸️ 继续：{{ stepIcon[currentProcessingStep.type] }} {{ currentProcessingStep.name }} ({{ Math.floor(gameStore.processingProgress) }}%)
+      </button>
+      <button
+        v-else-if="nextStep && !gameStore.isProcessing && gameStore.isNight"
         @click="startProcessing"
         class="mt-4 w-full py-3 bg-red-600 hover:bg-red-500 rounded text-sm font-medium text-white transition-colors"
       >

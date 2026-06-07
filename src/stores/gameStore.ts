@@ -143,9 +143,9 @@ export const useGameStore = defineStore('game', () => {
       stats.value = { ...data.stats }
       timePhase.value = data.timePhase
       day.value = data.day
-      isProcessing.value = false
-      currentProcessingStep.value = null
-      processingProgress.value = 0
+      isProcessing.value = data.isProcessing && data.processingProgress > 0 && data.processingProgress < 100
+      currentProcessingStep.value = data.isProcessing ? data.currentProcessingStep : null
+      processingProgress.value = data.isProcessing ? data.processingProgress : 0
       gameStarted.value = true
       return data
     } catch {
