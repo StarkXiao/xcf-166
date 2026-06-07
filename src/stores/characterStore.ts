@@ -495,9 +495,17 @@ export const useCharacterStore = defineStore('character', () => {
   function consumeAnomalyImmunity(): boolean {
     if (pendingAnomalyImmunity.value) {
       pendingAnomalyImmunity.value = false
+      const achievementStore = useAchievementStore()
+      achievementStore.trackBehavior('anomaly_resisted', {
+        source: 'pending_immunity'
+      })
       return true
     }
     if (isInvincible.value) {
+      const achievementStore = useAchievementStore()
+      achievementStore.trackBehavior('anomaly_resisted', {
+        source: 'invincible'
+      })
       return true
     }
     const buffIndex = activeBuffs.value.findIndex(b => b.type === 'anomaly_immunity' && b.remainingTurns > 0)
@@ -506,6 +514,10 @@ export const useCharacterStore = defineStore('character', () => {
       if (activeBuffs.value[buffIndex].remainingTurns <= 0) {
         activeBuffs.value.splice(buffIndex, 1)
       }
+      const achievementStore = useAchievementStore()
+      achievementStore.trackBehavior('anomaly_resisted', {
+        source: 'buff'
+      })
       return true
     }
     return false
@@ -514,6 +526,10 @@ export const useCharacterStore = defineStore('character', () => {
   function consumePerfectComplete(): boolean {
     if (pendingPerfectComplete.value) {
       pendingPerfectComplete.value = false
+      const achievementStore = useAchievementStore()
+      achievementStore.trackBehavior('perfect_completed', {
+        source: 'skill'
+      })
       return true
     }
     return false

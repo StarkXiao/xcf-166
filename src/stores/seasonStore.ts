@@ -22,6 +22,7 @@ import {
   rankRewardTiers,
 } from '@/game/data/seasonRewards'
 import { useActivityStore } from '@/stores/activityStore'
+import { useAchievementStore } from '@/stores/achievementStore'
 
 const SEASON_ACTIVITY_ID = 'act_001'
 
@@ -622,6 +623,14 @@ export const useSeasonStore = defineStore('season', () => {
       expReward: task.expReward,
     })
 
+    const achievementStore = useAchievementStore()
+    achievementStore.trackBehavior('task_completed', {
+      taskId,
+      taskTitle: task.title,
+      taskType: task.type,
+      expReward: task.expReward
+    })
+
     saveToStorage()
     return true
   }
@@ -681,15 +690,23 @@ export const useSeasonStore = defineStore('season', () => {
   function checkLevelUp() {
     if (!playerSeason.value || !currentSeason.value) return
 
+    const previousLevel = playerSeason.value.level
     const newLevel = getLevelFromExp(
       playerSeason.value.totalExp,
       currentSeason.value.baseExpPerLevel,
       currentSeason.value.expMultiplier
     )
 
-    if (newLevel > playerSeason.value.level) {
+    if (newLevel > previousLevel) {
       playerSeason.value.level = Math.min(newLevel, currentSeason.value.maxLevel)
       playerSeason.value.rankScore = calculateRankScore()
+
+      const achievementStore = useAchievementStore()
+      achievementStore.trackBehavior('season_level_up', {
+        previousLevel,
+        newLevel: playerSeason.value.level,
+        totalExp: playerSeason.value.totalExp
+      })
     }
   }
 
