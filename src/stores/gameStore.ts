@@ -5,6 +5,7 @@ import { useOrderStore } from './orderStore'
 import { useEventStore } from './eventStore'
 import { useSeasonStore } from './seasonStore'
 import { useCharacterStore } from './characterStore'
+import { useAchievementStore } from './achievementStore'
 
 const SAVE_KEY = 'b2_morgue_save'
 const SAVE_VERSION = '2.1.0'
@@ -68,6 +69,8 @@ export const useGameStore = defineStore('game', () => {
     if (amount > 0) {
       const seasonStore = useSeasonStore()
       seasonStore.updateTaskProgress('money_earn', amount)
+      const achievementStore = useAchievementStore()
+      achievementStore.trackBehavior('money_earned', { amount, previous, current: stats.value.money })
     }
   }
 
@@ -77,11 +80,18 @@ export const useGameStore = defineStore('game', () => {
     if (amount > 0) {
       const seasonStore = useSeasonStore()
       seasonStore.updateTaskProgress('reputation_gain', amount)
+      const achievementStore = useAchievementStore()
+      achievementStore.trackBehavior('reputation_gained', { amount, previous, current: stats.value.reputation })
     }
   }
 
   function addSanity(amount: number) {
+    const previous = stats.value.sanity
     stats.value.sanity = Math.max(0, Math.min(stats.value.maxSanity, stats.value.sanity + amount))
+    if (amount > 0) {
+      const achievementStore = useAchievementStore()
+      achievementStore.trackBehavior('sanity_recovered', { amount, previous, current: stats.value.sanity })
+    }
     checkGameOver()
   }
 
@@ -94,6 +104,8 @@ export const useGameStore = defineStore('game', () => {
   function advancePhase() {
     if (timePhase.value === 'day') {
       timePhase.value = 'night'
+      const achievementStore = useAchievementStore()
+      achievementStore.trackBehavior('night_fell', { day: day.value })
     } else {
       timePhase.value = 'day'
       day.value++
@@ -108,10 +120,12 @@ export const useGameStore = defineStore('game', () => {
 
       const seasonStore = useSeasonStore()
       seasonStore.updateTaskProgress('day_pass', 1)
+      const achievementStore = useAchievementStore()
+      achievementStore.trackBehavior('day_passed', { day: day.value, totalDays: day.value })
     }
   }
 
-  function completeOrder() {
+  function completeOrder(orderQuality?: string) {
     stats.value.totalOrdersCompleted++
     stats.value.totalRelicsProcessed++
 
@@ -122,6 +136,13 @@ export const useGameStore = defineStore('game', () => {
     const seasonStore = useSeasonStore()
     seasonStore.updateTaskProgress('order_complete', 1)
     seasonStore.updateTaskProgress('relic_purify', 1)
+
+    const achievementStore = useAchievementStore()
+    achievementStore.trackBehavior('order_completed', {
+      orderCount: stats.value.totalOrdersCompleted,
+      relicCount: stats.value.totalRelicsProcessed,
+      quality: orderQuality
+    })
   }
 
   function checkGameOver() {

@@ -11,6 +11,7 @@ import type {
 } from '../game/characterTypes'
 import { getAllCharacters, getExpForLevel, getAttributeGainPerLevel } from '../game/data/characters'
 import { useGameStore } from './gameStore'
+import { useAchievementStore } from './achievementStore'
 
 const SAVE_VERSION = '1.1.0'
 
@@ -218,6 +219,14 @@ export const useCharacterStore = defineStore('character', () => {
     const gameStore = useGameStore()
     gameStore.addSanity(0)
 
+    const achievementStore = useAchievementStore()
+    achievementStore.trackBehavior('character_unlocked', {
+      characterId,
+      characterName: char.name,
+      characterRarity: char.rarity,
+      totalUnlocked: characters.value.filter(c => c.unlocked).length
+    })
+
     return true
   }
 
@@ -251,6 +260,9 @@ export const useCharacterStore = defineStore('character', () => {
 
     char.exp += expToAdd
 
+    const previousLevel = char.level
+    let leveledUp = false
+
     while (char.exp >= char.expToNextLevel && char.level < char.maxLevel) {
       char.exp -= char.expToNextLevel
       char.level++
@@ -266,12 +278,30 @@ export const useCharacterStore = defineStore('character', () => {
         newSkill.unlocked = true
       }
 
+      leveledUp = true
       results.push({
         success: true,
         newLevel: char.level,
         newAttributes: char.currentAttributes.map(a => ({ ...a })),
         unlockedSkill: newSkill || undefined,
         message: `升级到 ${char.level} 级！`
+      })
+    }
+
+    const achievementStore = useAchievementStore()
+    achievementStore.trackBehavior('exp_gained', {
+      amount: expToAdd,
+      characterId: char.id,
+      characterLevel: char.level,
+      previousLevel,
+      leveledUp
+    })
+
+    if (leveledUp) {
+      achievementStore.trackBehavior('level_up', {
+        characterId: char.id,
+        characterLevel: char.level,
+        previousLevel
       })
     }
 
@@ -305,6 +335,17 @@ export const useCharacterStore = defineStore('character', () => {
     char.exp -= expCost
     skill.level++
     totalSpent.value.money += moneyCost
+
+    const achievementStore = useAchievementStore()
+    achievementStore.trackBehavior('skill_upgraded', {
+      characterId,
+      skillId,
+      skillName: skill.name,
+      skillType: skill.type,
+      newLevel: skill.level,
+      moneyCost,
+      expCost
+    })
 
     return {
       success: true,

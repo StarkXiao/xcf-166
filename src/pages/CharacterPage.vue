@@ -1,14 +1,20 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCharacterStore } from '@/stores/characterStore'
 import { useGameStore } from '@/stores/gameStore'
+import { useAchievementStore } from '@/stores/achievementStore'
+import { useSeasonStore } from '@/stores/seasonStore'
 import { audioManager } from '@/game/audio'
 import type { Character, CharacterSkill } from '@/game/characterTypes'
+import BadgeDisplay from '@/components/achievement/BadgeDisplay.vue'
+import { Trophy, Medal, Crown, Sparkles } from 'lucide-vue-next'
 
 const router = useRouter()
 const characterStore = useCharacterStore()
 const gameStore = useGameStore()
+const achievementStore = useAchievementStore()
+const seasonStore = useSeasonStore()
 
 const selectedCharacterId = ref<string | null>(characterStore.activeCharacterId)
 const showLevelUpAnimation = ref(false)
@@ -16,6 +22,18 @@ const levelUpMessage = ref('')
 const showSkillResult = ref(false)
 const skillResultMessage = ref('')
 const selectedSkillType = ref<'all' | 'passive' | 'active' | 'combat'>('all')
+const activeProfileTab = ref<'skills' | 'achievements'>('skills')
+
+onMounted(() => {
+  seasonStore.initSeason()
+  achievementStore.initAchievements(characterStore.activeCharacter?.id || 'player_local')
+  achievementStore.resyncProgress()
+})
+
+function goToAchievements() {
+  audioManager.playClick()
+  router.push('/achievements')
+}
 
 const rarityColors: Record<string, string> = {
   common: 'from-gray-600 to-gray-700 border-gray-500',
@@ -438,47 +456,81 @@ function getUnlockProgress(char: Character): number {
             </div>
           </div>
 
-          <div v-if="selectedCharacter && selectedCharacter.unlocked" class="bg-gray-900/80 rounded-2xl p-6 border border-gray-700">
-            <div class="flex items-center justify-between mb-6">
-              <h3 class="text-lg font-bold text-amber-400">✨ 技能列表</h3>
-              <div class="flex gap-2">
-                <button
-                  v-for="type in ['all', 'passive', 'active', 'combat']"
-                  :key="type"
-                  @click="selectedSkillType = type as any"
-                  class="px-3 py-1 rounded text-sm transition-colors"
-                  :class="selectedSkillType === type ? 'bg-amber-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'"
+          <div v-if="selectedCharacter && selectedCharacter.unlocked" class="bg-gray-900/80 rounded-2xl border border-gray-700 overflow-hidden">
+            <div class="flex border-b border-gray-700">
+              <button
+                @click="activeProfileTab = 'skills'"
+                class="flex-1 py-4 px-6 text-center font-medium transition-colors"
+                :class="activeProfileTab === 'skills'
+                  ? 'text-amber-400 bg-amber-500/10 border-b-2 border-amber-400'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'"
+              >
+                <span class="flex items-center justify-center gap-2">
+                  <Sparkles class="w-5 h-5" />
+                  技能养成
+                </span>
+              </button>
+              <button
+                @click="activeProfileTab = 'achievements'"
+                class="flex-1 py-4 px-6 text-center font-medium transition-colors relative"
+                :class="activeProfileTab === 'achievements'
+                  ? 'text-amber-400 bg-amber-500/10 border-b-2 border-amber-400'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'"
+              >
+                <span class="flex items-center justify-center gap-2">
+                  <Trophy class="w-5 h-5" />
+                  成就沉淀
+                </span>
+                <span
+                  v-if="achievementStore.unclaimedCount > 0"
+                  class="absolute top-2 right-4 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center"
                 >
-                  {{ type === 'all' ? '全部' : skillTypeNames[type] }}
-                </button>
-              </div>
+                  {{ achievementStore.unclaimedCount }}
+                </span>
+              </button>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div
-                v-for="skill in filteredSkills"
-                :key="skill.id"
-                class="p-4 rounded-xl border transition-all"
-                :class="[
-                  skill.unlocked ? 'bg-gray-800/50 border-gray-600' : 'bg-gray-900/50 border-gray-700 opacity-50',
-                  selectedCharacter.equippedSkillId === skill.id && 'border-amber-500 ring-1 ring-amber-500/50'
-                ]"
-              >
-                <div class="flex items-start gap-3">
-                  <div
-                    class="w-12 h-12 rounded-lg flex items-center justify-center text-2xl"
-                    :class="skill.unlocked ? 'bg-gray-700' : 'bg-gray-800'"
+            <div v-show="activeProfileTab === 'skills'" class="p-6">
+              <div class="flex items-center justify-between mb-6">
+                <h3 class="text-lg font-bold text-amber-400">✨ 技能列表</h3>
+                <div class="flex gap-2">
+                  <button
+                    v-for="type in ['all', 'passive', 'active', 'combat']"
+                    :key="type"
+                    @click="selectedSkillType = type as any"
+                    class="px-3 py-1 rounded text-sm transition-colors"
+                    :class="selectedSkillType === type ? 'bg-amber-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'"
                   >
-                    {{ skill.icon }}
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2 mb-1">
-                      <span class="font-bold text-white">{{ skill.name }}</span>
-                      <span
-                        class="text-xs px-2 py-0.5 rounded"
-                        :class="{
-                          'bg-gray-600 text-gray-300': skill.type === 'passive',
-                          'bg-blue-800 text-blue-300': skill.type === 'active',
+                    {{ type === 'all' ? '全部' : skillTypeNames[type] }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div
+                  v-for="skill in filteredSkills"
+                  :key="skill.id"
+                  class="p-4 rounded-xl border transition-all"
+                  :class="[
+                    skill.unlocked ? 'bg-gray-800/50 border-gray-600' : 'bg-gray-900/50 border-gray-700 opacity-50',
+                    selectedCharacter.equippedSkillId === skill.id && 'border-amber-500 ring-1 ring-amber-500/50'
+                  ]"
+                >
+                  <div class="flex items-start gap-3">
+                    <div
+                      class="w-12 h-12 rounded-lg flex items-center justify-center text-2xl"
+                      :class="skill.unlocked ? 'bg-gray-700' : 'bg-gray-800'"
+                    >
+                      {{ skill.icon }}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-2 mb-1">
+                        <span class="font-bold text-white">{{ skill.name }}</span>
+                        <span
+                          class="text-xs px-2 py-0.5 rounded"
+                          :class="{
+                            'bg-gray-600 text-gray-300': skill.type === 'passive',
+                            'bg-blue-800 text-blue-300': skill.type === 'active',
                           'bg-red-800 text-red-300': skill.type === 'combat'
                         }"
                       >
@@ -528,6 +580,154 @@ function getUnlockProgress(char: Character): number {
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
+            </div>
+
+            <div v-show="activeProfileTab === 'achievements'" class="p-6">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div class="bg-gradient-to-br from-amber-900/30 to-orange-900/30 rounded-xl p-4 border border-amber-500/30">
+                  <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center">
+                      <Trophy class="w-6 h-6 text-amber-400" />
+                    </div>
+                    <div>
+                      <div class="text-sm text-gray-400">成就完成度</div>
+                      <div class="text-2xl font-bold text-amber-400">
+                        {{ achievementStore.statistics.completionRate }}%
+                      </div>
+                    </div>
+                  </div>
+                  <div class="mt-2 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      class="h-full bg-gradient-to-r from-amber-500 to-orange-500"
+                      :style="{ width: `${achievementStore.statistics.completionRate}%` }"
+                    ></div>
+                  </div>
+                  <div class="text-xs text-gray-500 mt-1">
+                    {{ achievementStore.statistics.totalUnlocked }} / {{ achievementStore.statistics.totalCount }}
+                  </div>
+                </div>
+
+                <div class="bg-gradient-to-br from-purple-900/30 to-pink-900/30 rounded-xl p-4 border border-purple-500/30">
+                  <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center">
+                      <Medal class="w-6 h-6 text-purple-400" />
+                    </div>
+                    <div>
+                      <div class="text-sm text-gray-400">获得徽章</div>
+                      <div class="text-2xl font-bold text-purple-400">
+                        {{ achievementStore.getUnlockedBadges().length }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="bg-gradient-to-br from-green-900/30 to-emerald-900/30 rounded-xl p-4 border border-green-500/30">
+                  <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
+                      <Crown class="w-6 h-6 text-green-400" />
+                    </div>
+                    <div>
+                      <div class="text-sm text-gray-400">获得称号</div>
+                      <div class="text-2xl font-bold text-green-400">
+                        {{ achievementStore.getUnlockedTitles().length }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="achievementStore.getUnlockedBadges().length > 0" class="mb-6">
+                <h4 class="text-md font-bold text-amber-400 mb-3 flex items-center gap-2">
+                  <Medal class="w-4 h-4" />
+                  徽章收藏
+                </h4>
+                <div class="flex flex-wrap gap-4 p-4 bg-gray-800/30 rounded-xl">
+                  <BadgeDisplay
+                    v-for="badge in achievementStore.getUnlockedBadges()"
+                    :key="badge.id"
+                    :name="badge.name"
+                    :icon="badge.icon"
+                    :rarity="badge.rarity"
+                    size="md"
+                    :show-name="true"
+                  />
+                </div>
+              </div>
+
+              <div v-if="achievementStore.getUnlockedTitles().length > 0" class="mb-6">
+                <h4 class="text-md font-bold text-amber-400 mb-3 flex items-center gap-2">
+                  <Crown class="w-4 h-4" />
+                  称号收藏
+                </h4>
+                <div class="flex flex-wrap gap-2 p-4 bg-gray-800/30 rounded-xl">
+                  <div
+                    v-for="title in achievementStore.getUnlockedTitles()"
+                    :key="title.id"
+                    class="px-4 py-2 bg-gradient-to-r from-amber-600/20 to-orange-600/20 border border-amber-500/30 rounded-lg flex items-center gap-2"
+                  >
+                    <span class="text-lg">{{ title.icon }}</span>
+                    <span class="text-amber-300 font-medium">{{ title.name }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="achievementStore.unlockedAchievements.length > 0">
+                <h4 class="text-md font-bold text-amber-400 mb-3 flex items-center gap-2">
+                  <Trophy class="w-4 h-4" />
+                  最近成就
+                </h4>
+                <div class="space-y-3 max-h-64 overflow-y-auto">
+                  <div
+                    v-for="pa in [...achievementStore.unlockedAchievements].sort((a, b) => (b.unlockedAt || 0) - (a.unlockedAt || 0)).slice(0, 5)"
+                    :key="pa.id"
+                    class="flex items-center gap-3 p-3 bg-gray-800/30 rounded-lg"
+                  >
+                    <div
+                      class="w-10 h-10 rounded-lg bg-gradient-to-br flex items-center justify-center text-xl"
+                      :class="{
+                        'from-gray-500 to-gray-600': achievementStore.allAchievements.find(a => a.id === pa.achievementId)?.rarity === 'common',
+                        'from-green-500 to-emerald-600': achievementStore.allAchievements.find(a => a.id === pa.achievementId)?.rarity === 'uncommon',
+                        'from-blue-500 to-cyan-600': achievementStore.allAchievements.find(a => a.id === pa.achievementId)?.rarity === 'rare',
+                        'from-purple-500 to-pink-600': achievementStore.allAchievements.find(a => a.id === pa.achievementId)?.rarity === 'epic',
+                        'from-amber-500 to-orange-600': achievementStore.allAchievements.find(a => a.id === pa.achievementId)?.rarity === 'legendary'
+                      }"
+                    >
+                      {{ achievementStore.allAchievements.find(a => a.id === pa.achievementId)?.icon }}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="font-medium text-white truncate">
+                        {{ achievementStore.allAchievements.find(a => a.id === pa.achievementId)?.name }}
+                      </div>
+                      <div class="text-xs text-gray-500">
+                        {{ pa.unlockedAt ? new Date(pa.unlockedAt).toLocaleDateString() : '' }}
+                      </div>
+                    </div>
+                    <div
+                      v-if="!pa.claimed"
+                      class="text-xs px-2 py-1 bg-amber-500/20 text-amber-400 rounded animate-pulse"
+                    >
+                      可领取
+                    </div>
+                    <div
+                      v-else
+                      class="text-xs px-2 py-1 bg-green-500/20 text-green-400 rounded"
+                    >
+                      已领取
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-6 text-center">
+                <button
+                  @click="goToAchievements"
+                  class="px-6 py-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 rounded-xl font-bold text-white transition-all flex items-center gap-2 mx-auto"
+                >
+                  <Trophy class="w-5 h-5" />
+                  查看全部成就
+                </button>
               </div>
             </div>
           </div>

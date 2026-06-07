@@ -2,6 +2,7 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import GamePage from '@/pages/GamePage.vue'
 import SeasonPage from '@/pages/SeasonPage.vue'
 import CharacterPage from '@/pages/CharacterPage.vue'
+import AchievementPage from '@/pages/AchievementPage.vue'
 import AdminLayout from '@/components/admin/AdminLayout.vue'
 import ActivityListPage from '@/pages/admin/ActivityListPage.vue'
 import ActivityEditPage from '@/pages/admin/ActivityEditPage.vue'
@@ -23,6 +24,11 @@ const routes: RouteRecordRaw[] = [
     path: '/character',
     name: 'character',
     component: CharacterPage,
+  },
+  {
+    path: '/achievements',
+    name: 'achievements',
+    component: AchievementPage,
   },
   {
     path: '/admin',
