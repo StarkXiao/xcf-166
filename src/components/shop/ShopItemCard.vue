@@ -13,6 +13,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   buy: [item: ShopItem]
+  'add-to-cart': [item: ShopItem]
 }>()
 
 const shopStore = useShopStore()
@@ -45,9 +46,20 @@ const buyButtonText = computed(() => {
 const rarityColorClass = computed(() => rarityColors[props.item.rarity] || '')
 const rarityBgClass = computed(() => rarityBgColors[props.item.rarity] || '')
 
+const isInCart = computed(() => {
+  return shopStore.cart.some(c => c.item.id === props.item.id)
+})
+
 function handleBuy() {
   if (canBuy.value) {
     emit('buy', props.item)
+  }
+}
+
+function handleAddToCart() {
+  if (canBuy.value) {
+    shopStore.addToCart(props.item.id, 1)
+    emit('add-to-cart', props.item)
   }
 }
 
@@ -134,19 +146,35 @@ function formatTimeRemaining(endTime: number): string {
         <span>{{ unlockText }}</span>
       </div>
 
-      <button
-        @click="handleBuy"
-        :disabled="!canBuy"
-        class="w-full py-2.5 px-4 rounded-lg font-medium transition-all flex items-center justify-center gap-2"
-        :class="[
-          canBuy
-            ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white shadow-lg shadow-amber-500/25'
-            : 'bg-gray-700 text-gray-400 cursor-not-allowed'
-        ]"
-      >
-        <ShoppingCart class="w-4 h-4" />
-        {{ buyButtonText }}
-      </button>
+      <div class="flex gap-2">
+        <button
+          @click="handleAddToCart"
+          :disabled="!canBuy"
+          class="flex-1 py-2.5 px-3 rounded-lg font-medium transition-all flex items-center justify-center gap-1.5 text-sm"
+          :class="[
+            canBuy
+              ? isInCart
+                ? 'bg-green-600/20 text-green-400 border border-green-500/50'
+                : 'bg-gray-700 hover:bg-gray-600 text-gray-200 border border-gray-600'
+              : 'bg-gray-700/50 text-gray-500 cursor-not-allowed border border-gray-700'
+          ]"
+        >
+          <ShoppingCart class="w-4 h-4" />
+          {{ isInCart ? '已在购物车' : '加购' }}
+        </button>
+        <button
+          @click="handleBuy"
+          :disabled="!canBuy"
+          class="flex-1 py-2.5 px-3 rounded-lg font-medium transition-all flex items-center justify-center gap-1.5 text-sm"
+          :class="[
+            canBuy
+              ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white shadow-lg shadow-amber-500/25'
+              : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+          ]"
+        >
+          {{ buyButtonText }}
+        </button>
+      </div>
     </div>
   </div>
 </template>

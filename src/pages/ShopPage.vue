@@ -8,6 +8,7 @@ import ShopItemCard from '../components/shop/ShopItemCard.vue'
 import PurchaseConfirmModal from '../components/shop/PurchaseConfirmModal.vue'
 import OrderHistory from '../components/shop/OrderHistory.vue'
 import InventoryPanel from '../components/shop/InventoryPanel.vue'
+import ShoppingCart from '../components/shop/ShoppingCart.vue'
 import {
   Store,
   Tag,
@@ -18,7 +19,8 @@ import {
   Star,
   Clock,
   Sparkles,
-  ChevronDown
+  ChevronDown,
+  ShoppingCart as ShoppingCartIcon
 } from 'lucide-vue-next'
 
 const shopStore = useShopStore()
@@ -28,6 +30,7 @@ type TabType = 'shop' | 'orders' | 'inventory'
 const activeTab = ref<TabType>('shop')
 
 const showPurchaseModal = ref(false)
+const showCartModal = ref(false)
 const selectedItem = ref<ShopItem | null>(null)
 const selectedDiscount = ref<ReturnType<typeof shopStore.getItemDiscount> | null>(null)
 
@@ -41,6 +44,7 @@ const categories: Array<{ key: ItemCategory | 'all'; label: string }> = [
 
 const filteredItems = computed(() => shopStore.filteredItems)
 const activeDiscounts = computed(() => shopStore.activeDiscounts)
+const cartItemCount = computed(() => shopStore.cartItemCount)
 
 const stats = computed(() => gameStore.stats)
 
@@ -66,6 +70,7 @@ function handleBuy(item: ShopItem) {
 
 function handlePurchase(item: ShopItem, quantity: number) {
   console.log(`Purchased ${item.name} x${quantity}`)
+  showPurchaseModal.value = false
 }
 
 function setCategory(category: ItemCategory | 'all') {
@@ -74,6 +79,15 @@ function setCategory(category: ItemCategory | 'all') {
 
 function toggleShowOnSale() {
   shopStore.toggleShowOnSale()
+}
+
+function handleAddToCart(item: ShopItem) {
+  console.log(`Added ${item.name} to cart`)
+}
+
+function handleCartPurchaseSuccess(order: any) {
+  console.log('Cart purchase successful:', order)
+  showCartModal.value = false
 }
 </script>
 
@@ -94,6 +108,19 @@ function toggleShowOnSale() {
         </div>
 
         <div class="flex items-center gap-4">
+          <button
+            @click="showCartModal = true"
+            class="relative flex items-center gap-2 bg-blue-500/10 border border-blue-500/30 px-4 py-2 rounded-xl hover:bg-blue-500/20 transition-colors"
+          >
+            <ShoppingCartIcon class="w-5 h-5 text-blue-400" />
+            <span class="font-bold text-blue-400">购物车</span>
+            <span
+              v-if="cartItemCount > 0"
+              class="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center"
+            >
+              {{ cartItemCount }}
+            </span>
+          </button>
           <div class="flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/30 px-4 py-2 rounded-xl">
             <Coins class="w-5 h-5 text-yellow-400" />
             <span class="font-bold text-yellow-400">{{ stats.money.toLocaleString() }}</span>
@@ -202,6 +229,7 @@ function toggleShowOnSale() {
             :item="item"
             :discount="shopStore.getItemDiscount(item.id, item.category)"
             @buy="handleBuy"
+            @add-to-cart="handleAddToCart"
           />
         </div>
       </div>
@@ -221,6 +249,12 @@ function toggleShowOnSale() {
       :discount="selectedDiscount"
       @close="showPurchaseModal = false"
       @purchase="handlePurchase"
+    />
+
+    <ShoppingCart
+      :show="showCartModal"
+      @close="showCartModal = false"
+      @purchase-success="handleCartPurchaseSuccess"
     />
   </div>
 </template>
