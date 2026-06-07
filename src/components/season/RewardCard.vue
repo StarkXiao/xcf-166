@@ -69,6 +69,8 @@ async function handleClaim() {
 
   if (props.source === 'level') {
     seasonStore.claimLevelReward(props.reward.level)
+  } else if (props.source === 'rank') {
+    seasonStore.claimRankReward(props.reward.id)
   }
 
   isClaimed.value = true

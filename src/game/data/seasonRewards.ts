@@ -1,4 +1,24 @@
-import type { SeasonReward } from '@/types/season'
+import type { SeasonReward, RankRewardTier } from '@/types/season'
+
+export const rankRewardTiers: RankRewardTier[] = [
+  { minRank: 1, maxRank: 1, rewardId: 'reward_rank_1', tierName: '至尊王者' },
+  { minRank: 2, maxRank: 2, rewardId: 'reward_rank_2', tierName: '荣耀大师' },
+  { minRank: 3, maxRank: 3, rewardId: 'reward_rank_3', tierName: '璀璨钻石' },
+  { minRank: 4, maxRank: 10, rewardId: 'reward_rank_4_10', tierName: '尊贵铂金' },
+  { minRank: 11, maxRank: 50, rewardId: 'reward_rank_11_50', tierName: '坚韧黄金' },
+  { minRank: 51, maxRank: 100, rewardId: 'reward_rank_51_100', tierName: '不屈白银' },
+  { minRank: 101, rewardId: 'reward_rank_101_plus', tierName: '英勇青铜' },
+]
+
+export const rankRewards = [
+  { rank: 1, name: '至尊王者', reward: '10000金钱 + 传说称号' },
+  { rank: 2, name: '荣耀大师', reward: '5000金钱 + 史诗称号' },
+  { rank: 3, name: '璀璨钻石', reward: '3000金钱 + 史诗徽章' },
+  { rank: '4-10', name: '尊贵铂金', reward: '2000金钱 + 稀有徽章' },
+  { rank: '11-50', name: '坚韧黄金', reward: '1000金钱 + 稀有道具' },
+  { rank: '51-100', name: '不屈白银', reward: '500金钱' },
+  { rank: '101+', name: '英勇青铜', reward: '200金钱' },
+]
 
 export const seasonRewards: SeasonReward[] = [
   {
@@ -181,16 +201,97 @@ export const seasonRewards: SeasonReward[] = [
     value: 'mystery_box',
     isFree: true,
   },
-]
-
-export const rankRewards = [
-  { rank: 1, name: '至尊王者', reward: '10000金钱 + 传说称号' },
-  { rank: 2, name: '荣耀大师', reward: '5000金钱 + 史诗称号' },
-  { rank: 3, name: '璀璨钻石', reward: '3000金钱 + 史诗徽章' },
-  { rank: '4-10', name: '尊贵铂金', reward: '2000金钱 + 稀有徽章' },
-  { rank: '11-50', name: '坚韧黄金', reward: '1000金钱 + 稀有道具' },
-  { rank: '51-100', name: '不屈白银', reward: '500金钱' },
-  { rank: '101+', name: '英勇青铜', reward: '200金钱' },
+  {
+    id: 'reward_rank_1',
+    seasonId: 'season_001',
+    type: 'title',
+    level: 0,
+    rank: 1,
+    name: '至尊王者',
+    description: '赛季排行榜第1名奖励',
+    icon: 'Crown',
+    rarity: 'legendary',
+    value: 'title_rank_1',
+    isFree: true,
+  },
+  {
+    id: 'reward_rank_2',
+    seasonId: 'season_001',
+    type: 'title',
+    level: 0,
+    rank: 2,
+    name: '荣耀大师',
+    description: '赛季排行榜第2名奖励',
+    icon: 'Medal',
+    rarity: 'epic',
+    value: 'title_rank_2',
+    isFree: true,
+  },
+  {
+    id: 'reward_rank_3',
+    seasonId: 'season_001',
+    type: 'badge',
+    level: 0,
+    rank: 3,
+    name: '璀璨钻石',
+    description: '赛季排行榜第3名奖励',
+    icon: 'Award',
+    rarity: 'epic',
+    value: 'badge_rank_3',
+    isFree: true,
+  },
+  {
+    id: 'reward_rank_4_10',
+    seasonId: 'season_001',
+    type: 'badge',
+    level: 0,
+    rank: 10,
+    name: '尊贵铂金',
+    description: '赛季排行榜4-10名奖励',
+    icon: 'Star',
+    rarity: 'rare',
+    value: 'badge_rank_4_10',
+    isFree: true,
+  },
+  {
+    id: 'reward_rank_11_50',
+    seasonId: 'season_001',
+    type: 'item',
+    level: 0,
+    rank: 50,
+    name: '坚韧黄金',
+    description: '赛季排行榜11-50名奖励',
+    icon: 'Gift',
+    rarity: 'rare',
+    value: 'item_rank_11_50',
+    isFree: true,
+  },
+  {
+    id: 'reward_rank_51_100',
+    seasonId: 'season_001',
+    type: 'currency',
+    level: 0,
+    rank: 100,
+    name: '不屈白银',
+    description: '赛季排行榜51-100名奖励',
+    icon: 'Coins',
+    rarity: 'uncommon',
+    value: 500,
+    isFree: true,
+  },
+  {
+    id: 'reward_rank_101_plus',
+    seasonId: 'season_001',
+    type: 'currency',
+    level: 0,
+    rank: 999,
+    name: '英勇青铜',
+    description: '赛季排行榜101名及以后奖励',
+    icon: 'Coins',
+    rarity: 'common',
+    value: 200,
+    isFree: true,
+  },
 ]
 
 export function getRewardsBySeasonId(seasonId: string): SeasonReward[] {

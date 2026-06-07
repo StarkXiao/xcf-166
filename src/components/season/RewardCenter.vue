@@ -29,6 +29,14 @@ const claimableTaskRewards = computed(() => {
   return rewards
 })
 
+const claimableRankRewards = computed(() => {
+  return seasonStore.unclaimedRankRewards.map((r) => ({
+    reward: r,
+    source: 'rank' as const,
+    sourceId: r.id,
+  }))
+})
+
 const allClaimableRewards = computed(() => {
   const levelRewards = claimableLevelRewards.value.map((r) => ({
     reward: r,
@@ -40,7 +48,7 @@ const allClaimableRewards = computed(() => {
     source: 'task' as const,
     sourceId: taskId,
   }))
-  return [...levelRewards, ...taskRewards]
+  return [...levelRewards, ...taskRewards, ...claimableRankRewards.value]
 })
 
 const rewardHistory = computed(() => {

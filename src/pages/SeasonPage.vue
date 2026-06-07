@@ -65,8 +65,20 @@ function goBack() {
 
           <div class="flex items-center gap-6">
             <div class="text-right">
-              <div class="text-xs text-gray-500 mb-1">赛季剩余</div>
-              <div class="flex items-center gap-1 font-mono text-lg">
+              <div class="text-xs text-gray-500 mb-1">
+                {{ seasonStore.isSeasonSettled ? '赛季状态' : seasonStore.isSeasonEnded ? '赛季状态' : '赛季剩余' }}
+              </div>
+              <div v-if="seasonStore.isSeasonSettled" class="flex items-center gap-2">
+                <span class="px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 font-bold text-sm border border-amber-500/30">
+                  已结算
+                </span>
+              </div>
+              <div v-else-if="seasonStore.isSeasonEnded" class="flex items-center gap-2">
+                <span class="px-3 py-1 rounded-full bg-red-500/20 text-red-400 font-bold text-sm border border-red-500/30">
+                  结算中
+                </span>
+              </div>
+              <div v-else class="flex items-center gap-1 font-mono text-lg">
                 <span class="text-red-400 font-bold">{{ seasonStore.timeRemaining.days }}</span>
                 <span class="text-gray-500">天</span>
                 <span class="text-amber-400 font-bold">{{ String(seasonStore.timeRemaining.hours).padStart(2, '0') }}</span>

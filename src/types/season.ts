@@ -52,12 +52,33 @@ export interface SeasonReward {
   seasonId: string
   type: RewardType
   level: number
+  rank?: number
   name: string
   description: string
   icon: string
   rarity: RewardRarity
   value: string | number
   isFree: boolean
+}
+
+export interface RankRewardTier {
+  minRank: number
+  maxRank?: number
+  rewardId: string
+  tierName: string
+}
+
+export interface SeasonSettlement {
+  id: string
+  seasonId: string
+  playerId: string
+  finalRank: number
+  finalScore: number
+  finalLevel: number
+  rewardIds: string[]
+  settledAt: number
+  claimed: boolean
+  claimedAt?: number
 }
 
 export interface PlayerSeason {
@@ -128,4 +149,6 @@ export interface SeasonSaveData {
   taskProgresses: TaskProgress[]
   rewardRecords: RewardRecord[]
   expRecords: ExpRecord[]
+  settlements: SeasonSettlement[]
+  frozenLeaderboard: LeaderboardEntry[] | null
 }

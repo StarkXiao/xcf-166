@@ -93,7 +93,13 @@ function navigateTo(tab: string) {
                   {{ seasonStore.currentSeason?.theme }}
                 </span>
               </div>
-              <div class="px-4 py-1.5 rounded-full bg-green-500/20 border border-green-400/30">
+              <div v-if="seasonStore.isSeasonSettled" class="px-4 py-1.5 rounded-full bg-amber-500/20 border border-amber-400/30">
+                <span class="text-amber-300 text-sm font-medium">已结算</span>
+              </div>
+              <div v-else-if="seasonStore.isSeasonEnded" class="px-4 py-1.5 rounded-full bg-red-500/20 border border-red-400/30">
+                <span class="text-red-300 text-sm font-medium">结算中</span>
+              </div>
+              <div v-else class="px-4 py-1.5 rounded-full bg-green-500/20 border border-green-400/30">
                 <span class="text-green-300 text-sm font-medium">进行中</span>
               </div>
             </div>
@@ -184,6 +190,78 @@ function navigateTo(tab: string) {
       </div>
     </div>
 
+    <div v-if="seasonStore.currentSettlement" class="settlement-card relative overflow-hidden rounded-2xl p-6 border-2 border-amber-500/30 bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-red-500/10">
+      <div class="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-amber-500/20 to-transparent rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
+      
+      <div class="relative z-10">
+        <div class="flex items-center justify-between mb-6">
+          <div class="flex items-center gap-4">
+            <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/30">
+              <Trophy :size="32" class="text-white" />
+            </div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">赛季结算完成</h3>
+              <p class="text-amber-300">恭喜你完成了本赛季的所有挑战！</p>
+            </div>
+          </div>
+          <div class="text-right">
+            <div class="text-sm text-gray-400">结算时间</div>
+            <div class="text-white font-medium">
+              {{ new Date(seasonStore.currentSettlement.settledAt).toLocaleString('zh-CN') }}
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-4 gap-4 mb-6">
+          <div class="p-4 rounded-xl bg-gray-900/60 border border-gray-700/50">
+            <div class="text-sm text-gray-400 mb-1">最终排名</div>
+            <div class="text-3xl font-bold text-amber-400">#{{ seasonStore.currentSettlement.finalRank }}</div>
+          </div>
+          <div class="p-4 rounded-xl bg-gray-900/60 border border-gray-700/50">
+            <div class="text-sm text-gray-400 mb-1">最终积分</div>
+            <div class="text-3xl font-bold text-purple-400">{{ seasonStore.currentSettlement.finalScore.toLocaleString() }}</div>
+          </div>
+          <div class="p-4 rounded-xl bg-gray-900/60 border border-gray-700/50">
+            <div class="text-sm text-gray-400 mb-1">最终等级</div>
+            <div class="text-3xl font-bold text-blue-400">Lv.{{ seasonStore.currentSettlement.finalLevel }}</div>
+          </div>
+          <div class="p-4 rounded-xl bg-gray-900/60 border border-gray-700/50">
+            <div class="text-sm text-gray-400 mb-1">奖励状态</div>
+            <div v-if="seasonStore.currentSettlement.claimed" class="text-xl font-bold text-green-400">已领取</div>
+            <div v-else class="text-xl font-bold text-amber-400">待领取</div>
+          </div>
+        </div>
+
+        <div v-if="!seasonStore.currentSettlement.claimed" class="flex items-center gap-4">
+          <div class="flex-1 p-4 rounded-xl bg-gray-900/60 border border-gray-700/50">
+            <div class="text-sm text-gray-400 mb-2">结算奖励</div>
+            <div class="flex flex-wrap gap-2">
+              <span
+                v-for="reward in seasonStore.unclaimedRankRewards"
+                :key="reward.id"
+                class="px-3 py-1 rounded-lg text-sm font-medium"
+                :class="{
+                  'bg-gray-500/20 text-gray-300': reward.rarity === 'common',
+                  'bg-green-500/20 text-green-300': reward.rarity === 'uncommon',
+                  'bg-blue-500/20 text-blue-300': reward.rarity === 'rare',
+                  'bg-purple-500/20 text-purple-300': reward.rarity === 'epic',
+                  'bg-amber-500/20 text-amber-300': reward.rarity === 'legendary',
+                }"
+              >
+                {{ reward.name }}
+              </span>
+            </div>
+          </div>
+          <button
+            @click="navigateTo('rewards')"
+            class="px-8 py-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold text-lg hover:shadow-lg hover:shadow-amber-500/30 transition-all active:scale-95"
+          >
+            前往领取
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div class="grid grid-cols-3 gap-4">
       <div class="season-stats-card p-6 rounded-2xl bg-gray-900/60 border border-gray-800">
         <div class="flex items-center gap-3 mb-4">
@@ -236,6 +314,40 @@ function navigateTo(tab: string) {
         </div>
         <div class="text-sm text-gray-500">
           完成任务: <span class="text-amber-400 font-medium">{{ seasonStore.completedTasksCount }}</span> 个
+        </div>
+      </div>
+    </div>
+
+    <div v-if="!seasonStore.isSeasonSettled" class="p-6 rounded-2xl bg-gray-900/60 border border-dashed border-gray-700">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="text-lg font-bold text-white mb-2">开发测试工具</h3>
+          <p class="text-sm text-gray-500">点击按钮可以立即结算当前赛季，测试结算流程和奖励发放</p>
+        </div>
+        <div class="flex gap-3">
+          <button
+            @click="seasonStore.testSettleSeason()"
+            class="px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold hover:shadow-lg hover:shadow-amber-500/30 transition-all active:scale-95"
+          >
+            立即结算赛季
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div v-else class="p-6 rounded-2xl bg-gray-900/60 border border-dashed border-gray-700">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="text-lg font-bold text-white mb-2">开发测试工具</h3>
+          <p class="text-sm text-gray-500">赛季已结算，点击按钮可以重置赛季状态以便再次测试</p>
+        </div>
+        <div class="flex gap-3">
+          <button
+            @click="seasonStore.resetSeasonForTesting()"
+            class="px-6 py-3 rounded-xl bg-gradient-to-r from-gray-600 to-gray-700 text-white font-bold hover:shadow-lg transition-all active:scale-95"
+          >
+            重置赛季状态
+          </button>
         </div>
       </div>
     </div>

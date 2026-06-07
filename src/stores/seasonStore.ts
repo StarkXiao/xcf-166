@@ -11,6 +11,7 @@ import type {
   ExpRecord,
   Countdown,
   TaskConditionType,
+  SeasonSettlement,
 } from '@/types/season'
 import { getCurrentSeason } from '@/game/data/seasons'
 import { getTasksBySeasonId, getTasksByType } from '@/game/data/seasonTasks'
@@ -18,6 +19,7 @@ import {
   getRewardsBySeasonId,
   getRewardById,
   mockLeaderboard,
+  rankRewardTiers,
 } from '@/game/data/seasonRewards'
 
 const STORAGE_KEY = 'season_center_data'
@@ -55,15 +57,58 @@ export const useSeasonStore = defineStore('season', () => {
   const rewardRecords = ref<RewardRecord[]>([])
   const leaderboard = ref<LeaderboardEntry[]>([])
   const expRecords = ref<ExpRecord[]>([])
+  const settlements = ref<SeasonSettlement[]>([])
+  const frozenLeaderboard = ref<LeaderboardEntry[] | null>(null)
 
   const isSeasonActive = computed(() => {
     if (!currentSeason.value) return false
+    if (currentSeason.value.status === 'settled') return false
     const now = Date.now()
     return (
       currentSeason.value.status === 'active' &&
       currentSeason.value.startTime <= now &&
       currentSeason.value.endTime >= now
     )
+  })
+
+  const isSeasonEnded = computed(() => {
+    if (!currentSeason.value) return false
+    const now = Date.now()
+    return currentSeason.value.endTime < now || currentSeason.value.status === 'ended'
+  })
+
+  const isSeasonSettled = computed(() => {
+    if (!currentSeason.value) return false
+    return currentSeason.value.status === 'settled'
+  })
+
+  const isLeaderboardFrozen = computed(() => {
+    return frozenLeaderboard.value !== null
+  })
+
+  const displayLeaderboard = computed(() => {
+    if (frozenLeaderboard.value) {
+      return frozenLeaderboard.value
+    }
+    return leaderboard.value
+  })
+
+  const currentSettlement = computed(() => {
+    if (!currentSeason.value || !playerSeason.value) return null
+    return settlements.value.find(
+      (s) => s.seasonId === currentSeason.value!.id && s.playerId === playerSeason.value!.playerId
+    )
+  })
+
+  const unclaimedRankRewards = computed(() => {
+    if (!currentSettlement.value || currentSettlement.value.claimed) return []
+    return currentSettlement.value.rewardIds
+      .map((rewardId) => getRewardById(rewardId))
+      .filter((r): r is SeasonReward => r !== undefined)
+  })
+
+  const unclaimedRankCount = computed(() => {
+    return unclaimedRankRewards.value.length
   })
 
   const timeRemaining = computed<Countdown>(() => {
@@ -124,7 +169,7 @@ export const useSeasonStore = defineStore('season', () => {
 
   const playerRank = computed(() => {
     if (!playerSeason.value) return -1
-    const entry = leaderboard.value.find(
+    const entry = displayLeaderboard.value.find(
       (e) => e.playerId === playerSeason.value!.playerId
     )
     return entry ? entry.rank : -1
@@ -146,6 +191,7 @@ export const useSeasonStore = defineStore('season', () => {
         }
       })
     }
+    count += unclaimedRankCount.value
     return count
   })
 
@@ -243,6 +289,12 @@ export const useSeasonStore = defineStore('season', () => {
     if (savedData && savedData.expRecords) {
       expRecords.value = savedData.expRecords
     }
+    if (savedData && savedData.settlements) {
+      settlements.value = savedData.settlements
+    }
+    if (savedData && savedData.frozenLeaderboard) {
+      frozenLeaderboard.value = savedData.frozenLeaderboard
+    }
   }
 
   function loadLeaderboard() {
@@ -267,6 +319,123 @@ export const useSeasonStore = defineStore('season', () => {
         entry.rank = index + 1
       })
     }
+  }
+
+  function freezeLeaderboard() {
+    if (frozenLeaderboard.value) return false
+
+    frozenLeaderboard.value = [...displayLeaderboard.value].map((entry) => ({
+      ...entry,
+      updatedAt: Date.now(),
+    }))
+    saveToStorage()
+    return true
+  }
+
+  function getRankRewardByRank(rank: number): string | null {
+    const tier = rankRewardTiers.find((t) => {
+      if (t.maxRank !== undefined) {
+        return rank >= t.minRank && rank <= t.maxRank
+      }
+      return rank >= t.minRank
+    })
+    return tier ? tier.rewardId : null
+  }
+
+  function settleSeason(): boolean {
+    if (!currentSeason.value || !playerSeason.value) return false
+    if (currentSettlement.value) return false
+
+    freezeLeaderboard()
+
+    const playerEntry = displayLeaderboard.value.find(
+      (e) => e.playerId === playerSeason.value!.playerId
+    )
+    const finalRank = playerEntry?.rank || 999
+    const finalScore = playerEntry?.score || 0
+    const finalLevel = playerSeason.value.level
+
+    const rewardIds: string[] = []
+    const rankRewardId = getRankRewardByRank(finalRank)
+    if (rankRewardId) {
+      rewardIds.push(rankRewardId)
+    }
+
+    const settlement: SeasonSettlement = {
+      id: generateId(),
+      seasonId: currentSeason.value.id,
+      playerId: playerSeason.value.playerId,
+      finalRank,
+      finalScore,
+      finalLevel,
+      rewardIds,
+      settledAt: Date.now(),
+      claimed: false,
+    }
+
+    settlements.value.push(settlement)
+
+    if (currentSeason.value) {
+      currentSeason.value.status = 'settled'
+    }
+
+    saveToStorage()
+    return true
+  }
+
+  function claimRankReward(rewardId: string): boolean {
+    if (!currentSettlement.value || currentSettlement.value.claimed) return false
+    if (!currentSettlement.value.rewardIds.includes(rewardId)) return false
+    if (isRewardClaimed(rewardId)) return false
+
+    const reward = getRewardById(rewardId)
+    if (!reward) return false
+
+    const record: RewardRecord = {
+      id: generateId(),
+      playerSeasonId: playerSeason.value?.id || '',
+      rewardId,
+      source: 'rank',
+      claimedAt: Date.now(),
+    }
+    rewardRecords.value.push(record)
+
+    const allClaimed = currentSettlement.value.rewardIds.every((id) => isRewardClaimed(id))
+    if (allClaimed) {
+      currentSettlement.value.claimed = true
+      currentSettlement.value.claimedAt = Date.now()
+    }
+
+    saveToStorage()
+    return true
+  }
+
+  function claimAllRankRewards(): boolean {
+    if (!currentSettlement.value || currentSettlement.value.claimed) return false
+
+    let success = false
+    currentSettlement.value.rewardIds.forEach((rewardId) => {
+      if (!isRewardClaimed(rewardId)) {
+        const result = claimRankReward(rewardId)
+        if (result) success = true
+      }
+    })
+    return success
+  }
+
+  function testSettleSeason() {
+    if (!currentSeason.value) return false
+    currentSeason.value.status = 'ended'
+    return settleSeason()
+  }
+
+  function resetSeasonForTesting() {
+    if (!currentSeason.value) return
+    currentSeason.value.status = 'active'
+    currentSeason.value.endTime = Date.now() + 30 * 24 * 60 * 60 * 1000
+    frozenLeaderboard.value = null
+    settlements.value = []
+    saveToStorage()
   }
 
   function calculateRankScore(): number {
@@ -487,6 +656,8 @@ export const useSeasonStore = defineStore('season', () => {
         taskProgresses: Array.from(taskProgressMap.value.values()),
         rewardRecords: rewardRecords.value,
         expRecords: expRecords.value,
+        settlements: settlements.value,
+        frozenLeaderboard: frozenLeaderboard.value,
       }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
     } catch (e) {
@@ -521,7 +692,16 @@ export const useSeasonStore = defineStore('season', () => {
     rewardRecords,
     leaderboard,
     expRecords,
+    settlements,
+    frozenLeaderboard,
     isSeasonActive,
+    isSeasonEnded,
+    isSeasonSettled,
+    isLeaderboardFrozen,
+    displayLeaderboard,
+    currentSettlement,
+    unclaimedRankRewards,
+    unclaimedRankCount,
     timeRemaining,
     currentLevelExp,
     nextLevelExp,
@@ -538,6 +718,12 @@ export const useSeasonStore = defineStore('season', () => {
     loadTasks,
     loadRewards,
     loadLeaderboard,
+    freezeLeaderboard,
+    settleSeason,
+    claimRankReward,
+    claimAllRankRewards,
+    testSettleSeason,
+    resetSeasonForTesting,
     updateTaskProgress,
     claimTaskReward,
     claimLevelReward,

@@ -7,12 +7,12 @@ import { Trophy, TrendingUp, TrendingDown, Minus, Crown, Medal, Award, Gift, Clo
 const seasonStore = useSeasonStore()
 
 const sortedLeaderboard = computed(() => {
-  return [...seasonStore.leaderboard].sort((a, b) => a.rank - b.rank)
+  return [...seasonStore.displayLeaderboard].sort((a, b) => a.rank - b.rank)
 })
 
 const playerEntry = computed(() => {
   if (!seasonStore.playerSeason) return null
-  return seasonStore.leaderboard.find(
+  return seasonStore.displayLeaderboard.find(
     (e) => e.playerId === seasonStore.playerSeason!.playerId
   )
 })
@@ -89,7 +89,21 @@ function getRankReward(rank: number) {
       </div>
 
       <div class="flex items-center gap-4">
-        <div class="flex items-center gap-2 px-4 py-2 bg-gray-800/60 rounded-xl border border-gray-700/50">
+        <div v-if="seasonStore.isLeaderboardFrozen" class="flex items-center gap-2 px-4 py-2 bg-amber-500/20 rounded-xl border border-amber-500/40">
+          <Clock :size="18" class="text-amber-400" />
+          <span class="text-sm text-amber-400 font-medium">排行榜已冻结</span>
+          <span class="text-xs text-amber-300">
+            赛季已结算
+          </span>
+        </div>
+        <div v-else-if="seasonStore.isSeasonEnded" class="flex items-center gap-2 px-4 py-2 bg-red-500/20 rounded-xl border border-red-500/40">
+          <Clock :size="18" class="text-red-400" />
+          <span class="text-sm text-red-400 font-medium">赛季已结束</span>
+          <span class="text-xs text-red-300">
+            等待结算中
+          </span>
+        </div>
+        <div v-else class="flex items-center gap-2 px-4 py-2 bg-gray-800/60 rounded-xl border border-gray-700/50">
           <Clock :size="18" class="text-gray-500" />
           <span class="text-sm text-gray-400">结算倒计时</span>
           <span class="text-amber-400 font-mono font-bold">

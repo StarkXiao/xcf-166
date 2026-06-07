@@ -63,7 +63,7 @@ onUnmounted(() => {
 
 <template>
   <div
-    v-if="seasonStore.isSeasonActive"
+    v-if="seasonStore.isSeasonActive || seasonStore.isSeasonSettled || seasonStore.isSeasonEnded"
     class="home-season-card fixed bottom-6 right-6 z-40"
   >
     <Transition name="slide-up">
@@ -83,8 +83,12 @@ onUnmounted(() => {
               </div>
             </div>
             <div class="text-right">
-              <div class="text-xs text-gray-500">剩余时间</div>
-              <div class="font-mono text-amber-400 font-bold">{{ formatCountdown() }}</div>
+              <div class="text-xs text-gray-500">
+                {{ seasonStore.isSeasonSettled ? '赛季状态' : seasonStore.isSeasonEnded ? '赛季状态' : '剩余时间' }}
+              </div>
+              <div v-if="seasonStore.isSeasonSettled" class="text-amber-400 font-bold">已结算</div>
+              <div v-else-if="seasonStore.isSeasonEnded" class="text-red-400 font-bold">结算中</div>
+              <div v-else class="font-mono text-amber-400 font-bold">{{ formatCountdown() }}</div>
             </div>
           </div>
 
@@ -118,6 +122,29 @@ onUnmounted(() => {
               <div class="text-purple-400 font-bold text-sm">{{ seasonStore.playerRank > 0 ? '#' + seasonStore.playerRank : '-' }}</div>
             </div>
           </div>
+        </div>
+
+        <div v-if="seasonStore.currentSettlement && !seasonStore.currentSettlement.claimed" class="p-4 bg-amber-500/10 border-b border-amber-500/20">
+          <div class="flex items-center gap-2 mb-2">
+            <Trophy :size="16" class="text-amber-400 animate-pulse" />
+            <span class="text-sm font-medium text-amber-300">赛季结算奖励待领取</span>
+          </div>
+          <div class="mb-2 p-2 rounded-lg bg-gray-800/50">
+            <div class="flex items-center justify-between text-sm">
+              <span class="text-gray-400">最终排名</span>
+              <span class="text-amber-400 font-bold">#{{ seasonStore.currentSettlement.finalRank }}</span>
+            </div>
+            <div class="flex items-center justify-between text-sm mt-1">
+              <span class="text-gray-400">最终积分</span>
+              <span class="text-purple-400 font-bold">{{ seasonStore.currentSettlement.finalScore.toLocaleString() }}</span>
+            </div>
+          </div>
+          <button
+            @click="goToSeason('rewards')"
+            class="w-full py-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold text-sm hover:shadow-lg hover:shadow-amber-500/30 transition-all active:scale-95"
+          >
+            领取排行奖励
+          </button>
         </div>
 
         <div v-if="completedTasks.length > 0" class="p-4 bg-amber-500/10 border-b border-amber-500/20">
