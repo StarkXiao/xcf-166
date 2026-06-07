@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import type { GameStats, TimePhase, SaveData } from '../game/types'
 import { useOrderStore } from './orderStore'
 import { useEventStore } from './eventStore'
+import { useSeasonStore } from './seasonStore'
 
 const SAVE_KEY = 'b2_morgue_save'
 const SAVE_VERSION = '2.0.0'
@@ -61,11 +62,21 @@ export const useGameStore = defineStore('game', () => {
   }
 
   function addMoney(amount: number) {
+    const previous = stats.value.money
     stats.value.money = Math.max(0, stats.value.money + amount)
+    if (amount > 0) {
+      const seasonStore = useSeasonStore()
+      seasonStore.updateTaskProgress('money_earn', amount)
+    }
   }
 
   function addReputation(amount: number) {
+    const previous = stats.value.reputation
     stats.value.reputation = Math.max(0, Math.min(100, stats.value.reputation + amount))
+    if (amount > 0) {
+      const seasonStore = useSeasonStore()
+      seasonStore.updateTaskProgress('reputation_gain', amount)
+    }
   }
 
   function addSanity(amount: number) {
@@ -87,12 +98,17 @@ export const useGameStore = defineStore('game', () => {
       day.value++
       stats.value.day = day.value
       stats.value.sanity = Math.min(stats.value.maxSanity, stats.value.sanity + 10)
+      const seasonStore = useSeasonStore()
+      seasonStore.updateTaskProgress('day_pass', 1)
     }
   }
 
   function completeOrder() {
     stats.value.totalOrdersCompleted++
     stats.value.totalRelicsProcessed++
+    const seasonStore = useSeasonStore()
+    seasonStore.updateTaskProgress('order_complete', 1)
+    seasonStore.updateTaskProgress('relic_purify', 1)
   }
 
   function checkGameOver() {

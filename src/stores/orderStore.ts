@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import type { Order, Relic, OrderWithRelic } from '../game/types'
 import { getInitialOrders } from '../game/data/relics'
 import { useGameStore } from './gameStore'
+import { useSeasonStore } from './seasonStore'
 
 export const useOrderStore = defineStore('order', () => {
   const gameStore = useGameStore()
@@ -33,6 +34,10 @@ export const useOrderStore = defineStore('order', () => {
     orderData.order.status = 'accepted'
     acceptedOrders.value.push(orderData)
     pendingOrders.value.splice(idx, 1)
+    
+    const seasonStore = useSeasonStore()
+    seasonStore.updateTaskProgress('order_accept', 1)
+    
     return true
   }
 
