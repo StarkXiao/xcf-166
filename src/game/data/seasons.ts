@@ -21,6 +21,15 @@ export const seasons: Season[] = [
 
 export function getCurrentSeason(): Season | undefined {
   const now = Date.now()
+  return seasons.find((s) => {
+    if (s.status === 'settled') return true
+    if (s.status === 'ended') return true
+    return s.status === 'active' && s.startTime <= now && s.endTime >= now
+  })
+}
+
+export function getActiveSeason(): Season | undefined {
+  const now = Date.now()
   return seasons.find(
     (s) => s.status === 'active' && s.startTime <= now && s.endTime >= now
   )

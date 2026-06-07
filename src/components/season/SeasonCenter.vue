@@ -322,9 +322,15 @@ function navigateTo(tab: string) {
       <div class="flex items-center justify-between">
         <div>
           <h3 class="text-lg font-bold text-white mb-2">开发测试工具</h3>
-          <p class="text-sm text-gray-500">点击按钮可以立即结算当前赛季，测试结算流程和奖励发放</p>
+          <p class="text-sm text-gray-500">测试结算流程和自动结算功能</p>
         </div>
         <div class="flex gap-3">
+          <button
+            @click="seasonStore.setSeasonEndsInSeconds(5)"
+            class="px-6 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-bold hover:shadow-lg hover:shadow-blue-500/30 transition-all active:scale-95"
+          >
+            5秒后自动结算
+          </button>
           <button
             @click="seasonStore.testSettleSeason()"
             class="px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold hover:shadow-lg hover:shadow-amber-500/30 transition-all active:scale-95"

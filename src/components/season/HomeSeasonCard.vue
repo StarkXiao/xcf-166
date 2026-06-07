@@ -52,12 +52,14 @@ onMounted(() => {
   }
 
   countdownInterval = window.setInterval(() => {}, 1000)
+  seasonStore.startAutoCheck(1000)
 })
 
 onUnmounted(() => {
   if (countdownInterval) {
     clearInterval(countdownInterval)
   }
+  seasonStore.stopAutoCheck()
 })
 </script>
 

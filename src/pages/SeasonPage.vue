@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSeasonStore } from '@/stores/seasonStore'
 import { Trophy, ListTodo, TrendingUp, Gift, ArrowLeft } from 'lucide-vue-next'
@@ -29,6 +29,11 @@ onMounted(() => {
   if (tab && tabs.some((t) => t.id === tab)) {
     activeTab.value = tab
   }
+  seasonStore.startAutoCheck(1000)
+})
+
+onUnmounted(() => {
+  seasonStore.stopAutoCheck()
 })
 
 function switchTab(tabId: string) {

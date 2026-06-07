@@ -59,6 +59,8 @@ export const useSeasonStore = defineStore('season', () => {
   const expRecords = ref<ExpRecord[]>([])
   const settlements = ref<SeasonSettlement[]>([])
   const frozenLeaderboard = ref<LeaderboardEntry[] | null>(null)
+  let autoCheckTimer: number | null = null
+  let autoCheckRunning = false
 
   const isSeasonActive = computed(() => {
     if (!currentSeason.value) return false
@@ -203,6 +205,52 @@ export const useSeasonStore = defineStore('season', () => {
     return taskProgressMap.value.get(taskId)
   }
 
+  function checkAndSettleIfEnded(): boolean {
+    if (!currentSeason.value || !playerSeason.value) return false
+
+    if (currentSeason.value.status === 'settled') {
+      stopAutoCheck()
+      return false
+    }
+
+    const now = Date.now()
+    const isEnded = currentSeason.value.endTime < now || currentSeason.value.status === 'ended'
+
+    if (isEnded && !currentSettlement.value) {
+      if (autoCheckRunning) return false
+      autoCheckRunning = true
+
+      try {
+        const success = settleSeason()
+        if (success) {
+          stopAutoCheck()
+        }
+        return success
+      } finally {
+        autoCheckRunning = false
+      }
+    }
+
+    return false
+  }
+
+  function startAutoCheck(intervalMs: number = 1000) {
+    stopAutoCheck()
+
+    checkAndSettleIfEnded()
+
+    autoCheckTimer = window.setInterval(() => {
+      checkAndSettleIfEnded()
+    }, intervalMs)
+  }
+
+  function stopAutoCheck() {
+    if (autoCheckTimer !== null) {
+      clearInterval(autoCheckTimer)
+      autoCheckTimer = null
+    }
+  }
+
   function initSeason(playerId: string = 'player_local') {
     loadCurrentSeason()
     loadPlayerSeason(playerId)
@@ -210,6 +258,7 @@ export const useSeasonStore = defineStore('season', () => {
     loadRewards()
     loadLeaderboard()
     checkAndResetTasks()
+    checkAndSettleIfEnded()
   }
 
   function loadCurrentSeason() {
@@ -379,6 +428,7 @@ export const useSeasonStore = defineStore('season', () => {
       currentSeason.value.status = 'settled'
     }
 
+    stopAutoCheck()
     saveToStorage()
     return true
   }
@@ -436,6 +486,15 @@ export const useSeasonStore = defineStore('season', () => {
     frozenLeaderboard.value = null
     settlements.value = []
     saveToStorage()
+    startAutoCheck()
+  }
+
+  function setSeasonEndsInSeconds(seconds: number) {
+    if (!currentSeason.value) return false
+    if (currentSeason.value.status === 'settled') return false
+    currentSeason.value.endTime = Date.now() + seconds * 1000
+    saveToStorage()
+    return true
   }
 
   function calculateRankScore(): number {
@@ -724,6 +783,10 @@ export const useSeasonStore = defineStore('season', () => {
     claimAllRankRewards,
     testSettleSeason,
     resetSeasonForTesting,
+    setSeasonEndsInSeconds,
+    checkAndSettleIfEnded,
+    startAutoCheck,
+    stopAutoCheck,
     updateTaskProgress,
     claimTaskReward,
     claimLevelReward,
