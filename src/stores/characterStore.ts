@@ -2,23 +2,30 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type {
   Character,
-  CharacterSkill,
   LevelUpResult,
   CombatBonus,
   CharacterSaveData,
-  AttributeType
+  AttributeType,
+  ActiveBuff,
+  BuffType
 } from '../game/characterTypes'
 import { getAllCharacters, getExpForLevel, getAttributeGainPerLevel } from '../game/data/characters'
 import { useGameStore } from './gameStore'
 
-const CHAR_SAVE_KEY = 'b2_morgue_characters'
-const SAVE_VERSION = '1.0.0'
+const SAVE_VERSION = '1.1.0'
 
 export const useCharacterStore = defineStore('character', () => {
   const characters = ref<Character[]>(getAllCharacters())
   const activeCharacterId = ref<string | null>('apprentice')
   const totalExp = ref(0)
   const totalSpent = ref({ money: 0, reputation: 0 })
+
+  const activeBuffs = ref<ActiveBuff[]>([])
+  const pendingPerfectComplete = ref(false)
+  const pendingAnomalyImmunity = ref(false)
+  const currentOrderRewardMultiplier = ref(1.0)
+  const doubleAllRemainingDays = ref(0)
+  const isInvincible = ref(false)
 
   const activeCharacter = computed(() => {
     return characters.value.find(c => c.id === activeCharacterId.value) || null
@@ -30,6 +37,22 @@ export const useCharacterStore = defineStore('character', () => {
 
   const lockedCharacters = computed(() => {
     return characters.value.filter(c => !c.unlocked)
+  })
+
+  const equippedSkill = computed(() => {
+    const char = activeCharacter.value
+    if (!char || !char.equippedSkillId) return null
+    return char.skills.find(s => s.id === char.equippedSkillId) || null
+  })
+
+  const hasAnomalyImmunity = computed(() => {
+    if (pendingAnomalyImmunity.value) return true
+    if (isInvincible.value) return true
+    return activeBuffs.value.some(b => b.type === 'anomaly_immunity' && b.remainingTurns > 0)
+  })
+
+  const hasPerfectComplete = computed(() => {
+    return pendingPerfectComplete.value
   })
 
   const totalCombatBonus = computed((): CombatBonus => {
@@ -100,6 +123,32 @@ export const useCharacterStore = defineStore('character', () => {
       }
     })
 
+    activeBuffs.value.forEach(buff => {
+      if (buff.remainingTurns <= 0) return
+      switch (buff.type) {
+        case 'processing_speed':
+          bonus.processingSpeed += buff.value
+          break
+        case 'sanity_protection':
+          bonus.sanityProtection += buff.value
+          break
+        case 'reward_multiplier':
+          bonus.rewardMultiplier += buff.value
+          break
+        case 'anomaly_resistance':
+          bonus.anomalyResistance += buff.value
+          break
+      }
+    })
+
+    if (doubleAllRemainingDays.value > 0) {
+      bonus.processingSpeed *= 2
+      bonus.sanityProtection *= 2
+      bonus.rewardMultiplier *= 2
+      bonus.anomalyResistance *= 2
+      bonus.successRateBonus *= 2
+    }
+
     return bonus
   })
 
@@ -110,9 +159,21 @@ export const useCharacterStore = defineStore('character', () => {
     return attr?.value || 0
   }
 
+  function addBuff(buff: ActiveBuff) {
+    const existingIndex = activeBuffs.value.findIndex(b => b.type === buff.type && b.sourceSkillId === buff.sourceSkillId)
+    if (existingIndex >= 0) {
+      activeBuffs.value[existingIndex] = buff
+    } else {
+      activeBuffs.value.push(buff)
+    }
+  }
+
+  function removeBuff(buffId: string) {
+    activeBuffs.value = activeBuffs.value.filter(b => b.id !== buffId)
+  }
+
   function checkUnlockConditions() {
     const gameStore = useGameStore()
-    const orderStore = useGameStore()
 
     characters.value.forEach(char => {
       if (char.unlocked) return
@@ -152,6 +213,9 @@ export const useCharacterStore = defineStore('character', () => {
     if (char.skills.length > 0) {
       char.skills[0].unlocked = true
     }
+
+    const gameStore = useGameStore()
+    gameStore.addSanity(0)
 
     return true
   }
@@ -255,8 +319,10 @@ export const useCharacterStore = defineStore('character', () => {
     const skill = char.skills.find(s => s.id === skillId)
     if (!skill || !skill.unlocked) return false
     if (skill.type === 'passive') return false
+    if (skill.level === 0) return false
 
     char.equippedSkillId = skillId
+
     return true
   }
 
@@ -269,34 +335,86 @@ export const useCharacterStore = defineStore('character', () => {
     if (!skill.unlocked) return { success: false, message: '技能未解锁' }
     if (skill.level === 0) return { success: false, message: '技能未升级' }
     if (skill.currentCooldown > 0) {
-      return { success: false, message: `技能冷却中，还需 ${skill.currentCooldown} 回合` }
+      return { success: false, message: `技能冷却中，还需 ${skill.currentCooldown} 天` }
     }
+    if (skill.type === 'passive') return { success: false, message: '被动技能无需主动使用' }
 
     const gameStore = useGameStore()
     const effectValue = (skill.effect.value || 0) * skill.level
+    const duration = skill.effect.duration || 1
 
     switch (skill.effect.special) {
       case 'anomaly_immunity':
+        pendingAnomalyImmunity.value = true
+        skill.currentCooldown = skill.cooldown
         return { success: true, message: '下一次处理不会触发异常事件', newLevel: 0 }
+
       case 'double_reward':
+        currentOrderRewardMultiplier.value = 1.5
+        skill.currentCooldown = skill.cooldown
         return { success: true, message: '当前订单将获得150%报酬', newLevel: 0 }
+
       case 'triple_reward':
+        currentOrderRewardMultiplier.value = 3.0
+        skill.currentCooldown = skill.cooldown
         return { success: true, message: '当前订单将获得3倍报酬和声望', newLevel: 0 }
+
       case 'complete_step':
+        skill.currentCooldown = skill.cooldown
         return { success: true, message: '立即完成当前处理步骤', newLevel: 0 }
+
       case 'perfect_complete':
+        pendingPerfectComplete.value = true
+        skill.currentCooldown = skill.cooldown
         return { success: true, message: '下一个订单将自动完美完成', newLevel: 0 }
+
       case 'purification_boost':
-        return { success: true, message: '本夜净化效率大幅提升', newLevel: 0 }
+        addBuff({
+          id: `buff_${Date.now()}`,
+          name: skill.name,
+          icon: skill.icon,
+          type: 'processing_speed',
+          value: 50 + (skill.level * 10),
+          remainingTurns: duration,
+          sourceSkillId: skillId,
+          description: '净化效率大幅提升'
+        })
+        addBuff({
+          id: `buff_san_${Date.now()}`,
+          name: skill.name,
+          icon: skill.icon,
+          type: 'sanity_protection',
+          value: 50 + (skill.level * 10),
+          remainingTurns: duration,
+          sourceSkillId: skillId,
+          description: '理智消耗大幅降低'
+        })
+        skill.currentCooldown = skill.cooldown
+        return { success: true, message: '本夜净化效率大幅提升，理智消耗降低50%', newLevel: 0 }
+
       case 'invincible':
         gameStore.stats.sanity = gameStore.stats.maxSanity
+        isInvincible.value = true
+        addBuff({
+          id: `buff_inv_${Date.now()}`,
+          name: skill.name,
+          icon: skill.icon,
+          type: 'anomaly_immunity',
+          value: 100,
+          remainingTurns: duration,
+          sourceSkillId: skillId,
+          description: '本夜免疫所有异常'
+        })
         skill.currentCooldown = skill.cooldown
         return { success: true, message: '理智已恢复满，本夜无敌！', newLevel: 0 }
+
       case 'permanent_sanity_bonus':
         gameStore.stats.maxSanity += 5
         skill.currentCooldown = skill.cooldown
         return { success: true, message: '最大理智值永久+5！', newLevel: 0 }
+
       case 'double_all':
+        doubleAllRemainingDays.value = 3
         skill.currentCooldown = skill.cooldown
         return { success: true, message: '接下来3天，所有效果翻倍！', newLevel: 0 }
     }
@@ -315,14 +433,53 @@ export const useCharacterStore = defineStore('character', () => {
       }
     }
 
-    if (skill.type !== 'passive') {
-      skill.currentCooldown = skill.cooldown
-    }
+    skill.currentCooldown = skill.cooldown
 
     return {
       success: true,
       message: `使用了 ${skill.name}！`
     }
+  }
+
+  function useEquippedSkill(): LevelUpResult {
+    const char = activeCharacter.value
+    if (!char || !char.equippedSkillId) {
+      return { success: false, message: '没有装备的技能' }
+    }
+    return useSkill(char.equippedSkillId)
+  }
+
+  function consumeAnomalyImmunity(): boolean {
+    if (pendingAnomalyImmunity.value) {
+      pendingAnomalyImmunity.value = false
+      return true
+    }
+    if (isInvincible.value) {
+      return true
+    }
+    const buffIndex = activeBuffs.value.findIndex(b => b.type === 'anomaly_immunity' && b.remainingTurns > 0)
+    if (buffIndex >= 0) {
+      activeBuffs.value[buffIndex].remainingTurns--
+      if (activeBuffs.value[buffIndex].remainingTurns <= 0) {
+        activeBuffs.value.splice(buffIndex, 1)
+      }
+      return true
+    }
+    return false
+  }
+
+  function consumePerfectComplete(): boolean {
+    if (pendingPerfectComplete.value) {
+      pendingPerfectComplete.value = false
+      return true
+    }
+    return false
+  }
+
+  function getAndResetRewardMultiplier(): number {
+    const multiplier = currentOrderRewardMultiplier.value
+    currentOrderRewardMultiplier.value = 1.0
+    return multiplier
   }
 
   function reduceCooldowns() {
@@ -333,6 +490,17 @@ export const useCharacterStore = defineStore('character', () => {
         }
       })
     })
+
+    activeBuffs.value = activeBuffs.value.filter(buff => {
+      buff.remainingTurns--
+      return buff.remainingTurns > 0
+    })
+
+    if (doubleAllRemainingDays.value > 0) {
+      doubleAllRemainingDays.value--
+    }
+
+    isInvincible.value = false
   }
 
   function calculateProcessingSpeed(baseDuration: number): number {
@@ -342,6 +510,7 @@ export const useCharacterStore = defineStore('character', () => {
   }
 
   function calculateSanityCost(baseCost: number): number {
+    if (isInvincible.value) return 0
     const bonus = totalCombatBonus.value.sanityProtection
     const reduction = bonus / 100
     return Math.max(0, baseCost * (1 - reduction))
@@ -350,17 +519,62 @@ export const useCharacterStore = defineStore('character', () => {
   function calculateReward(baseReward: number): number {
     const bonus = totalCombatBonus.value.rewardMultiplier
     const multiplier = 1 + bonus / 100
-    return Math.floor(baseReward * multiplier)
+    const orderMultiplier = currentOrderRewardMultiplier.value
+    return Math.floor(baseReward * multiplier * orderMultiplier)
   }
 
   function calculateAnomalyResistance(baseChance: number): number {
+    if (hasAnomalyImmunity.value) return 0
     const bonus = totalCombatBonus.value.anomalyResistance
     const reduction = bonus / 100
     return Math.max(0, baseChance * (1 - reduction))
   }
 
-  function saveCharacters(): CharacterSaveData {
-    const saveData: CharacterSaveData = {
+  function restoreFromSaveData(saveData: CharacterSaveData) {
+    characters.value = getAllCharacters()
+
+    saveData.characters.forEach((savedChar) => {
+      const char = characters.value.find(c => c.id === savedChar.id)
+      if (!char) return
+
+      char.unlocked = savedChar.unlocked
+      char.level = savedChar.level
+      char.exp = savedChar.exp
+      char.equippedSkillId = savedChar.equippedSkillId
+
+      const template = characterTemplates.find(t => t.id === char.id)
+      if (template) {
+        char.expToNextLevel = getExpForLevel(char.level, template.expToNextLevel)
+      }
+
+      const gains = getAttributeGainPerLevel(char.rarity)
+      char.currentAttributes = char.baseAttributes.map(attr => ({
+        ...attr,
+        value: attr.value + (gains[attr.type] || 0) * (char.level - 1)
+      }))
+
+      savedChar.skills.forEach(savedSkill => {
+        const skill = char.skills.find(s => s.id === savedSkill.id)
+        if (skill) {
+          skill.level = savedSkill.level
+          skill.unlocked = savedSkill.unlocked
+          skill.currentCooldown = savedSkill.currentCooldown
+        }
+      })
+    })
+
+    activeCharacterId.value = saveData.activeCharacterId
+    totalExp.value = saveData.totalExp
+    totalSpent.value = saveData.totalSpent
+    activeBuffs.value = saveData.activeBuffs || []
+    pendingPerfectComplete.value = saveData.pendingPerfectComplete || false
+    pendingAnomalyImmunity.value = saveData.pendingAnomalyImmunity || false
+    currentOrderRewardMultiplier.value = saveData.currentOrderRewardMultiplier || 1.0
+    doubleAllRemainingDays.value = saveData.doubleAllRemainingDays || 0
+  }
+
+  function getSaveData(): CharacterSaveData {
+    return {
       characters: characters.value.map(char => ({
         id: char.id,
         unlocked: char.unlocked,
@@ -376,78 +590,20 @@ export const useCharacterStore = defineStore('character', () => {
       })),
       activeCharacterId: activeCharacterId.value,
       totalExp: totalExp.value,
-      totalSpent: { ...totalSpent.value }
-    }
-
-    localStorage.setItem(CHAR_SAVE_KEY, JSON.stringify({
-      ...saveData,
-      timestamp: Date.now(),
-      version: SAVE_VERSION
-    }))
-
-    return saveData
-  }
-
-  function loadCharacters(): CharacterSaveData | null {
-    const raw = localStorage.getItem(CHAR_SAVE_KEY)
-    if (!raw) return null
-
-    try {
-      const data = JSON.parse(raw)
-      if (data.version !== SAVE_VERSION) {
-        console.warn('角色存档版本不兼容')
-        return null
-      }
-
-      characters.value = getAllCharacters()
-
-      data.characters.forEach((savedChar: CharacterSaveData['characters'][0]) => {
-        const char = characters.value.find(c => c.id === savedChar.id)
-        if (!char) return
-
-        char.unlocked = savedChar.unlocked
-        char.level = savedChar.level
-        char.exp = savedChar.exp
-        char.equippedSkillId = savedChar.equippedSkillId
-
-        const template = characterTemplates.find(t => t.id === char.id)
-        if (template) {
-          char.expToNextLevel = getExpForLevel(char.level, template.expToNextLevel)
-        }
-
-        const gains = getAttributeGainPerLevel(char.rarity)
-        char.currentAttributes = char.baseAttributes.map(attr => ({
-          ...attr,
-          value: attr.value + (gains[attr.type] || 0) * (char.level - 1)
-        }))
-
-        savedChar.skills.forEach(savedSkill => {
-          const skill = char.skills.find(s => s.id === savedSkill.id)
-          if (skill) {
-            skill.level = savedSkill.level
-            skill.unlocked = savedSkill.unlocked
-            skill.currentCooldown = savedSkill.currentCooldown
-          }
-        })
-      })
-
-      activeCharacterId.value = data.activeCharacterId
-      totalExp.value = data.totalExp
-      totalSpent.value = data.totalSpent
-
-      return data
-    } catch {
-      console.error('角色存档读取失败')
-      return null
+      totalSpent: { ...totalSpent.value },
+      activeBuffs: [...activeBuffs.value],
+      pendingPerfectComplete: pendingPerfectComplete.value,
+      pendingAnomalyImmunity: pendingAnomalyImmunity.value,
+      currentOrderRewardMultiplier: currentOrderRewardMultiplier.value,
+      doubleAllRemainingDays: doubleAllRemainingDays.value
     }
   }
 
   function hasCharacterSave(): boolean {
-    return localStorage.getItem(CHAR_SAVE_KEY) !== null
+    return false
   }
 
   function deleteCharacterSave() {
-    localStorage.removeItem(CHAR_SAVE_KEY)
   }
 
   function resetCharacters() {
@@ -455,6 +611,12 @@ export const useCharacterStore = defineStore('character', () => {
     activeCharacterId.value = 'apprentice'
     totalExp.value = 0
     totalSpent.value = { money: 0, reputation: 0 }
+    activeBuffs.value = []
+    pendingPerfectComplete.value = false
+    pendingAnomalyImmunity.value = false
+    currentOrderRewardMultiplier.value = 1.0
+    doubleAllRemainingDays.value = 0
+    isInvincible.value = false
   }
 
   return {
@@ -463,10 +625,21 @@ export const useCharacterStore = defineStore('character', () => {
     activeCharacter,
     unlockedCharacters,
     lockedCharacters,
+    activeBuffs,
+    equippedSkill,
+    hasAnomalyImmunity,
+    hasPerfectComplete,
+    pendingAnomalyImmunity,
+    pendingPerfectComplete,
+    currentOrderRewardMultiplier,
+    doubleAllRemainingDays,
+    isInvincible,
     totalExp,
     totalSpent,
     totalCombatBonus,
     getAttributeValue,
+    addBuff,
+    removeBuff,
     checkUnlockConditions,
     unlockCharacter,
     switchCharacter,
@@ -474,13 +647,17 @@ export const useCharacterStore = defineStore('character', () => {
     upgradeSkill,
     equipSkill,
     useSkill,
+    useEquippedSkill,
+    consumeAnomalyImmunity,
+    consumePerfectComplete,
+    getAndResetRewardMultiplier,
     reduceCooldowns,
     calculateProcessingSpeed,
     calculateSanityCost,
     calculateReward,
     calculateAnomalyResistance,
-    saveCharacters,
-    loadCharacters,
+    restoreFromSaveData,
+    getSaveData,
     hasCharacterSave,
     deleteCharacterSave,
     resetCharacters

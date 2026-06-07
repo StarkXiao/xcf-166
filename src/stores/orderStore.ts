@@ -58,8 +58,20 @@ export const useOrderStore = defineStore('order', () => {
     orderData.order.status = 'completed'
 
     const characterStore = useCharacterStore()
-    const adjustedReward = characterStore.calculateReward(orderData.order.reward)
-    const adjustedReputation = characterStore.calculateReward(orderData.order.reputationReward)
+    
+    const isPerfect = characterStore.consumePerfectComplete()
+    const rewardMultiplier = characterStore.getAndResetRewardMultiplier()
+    
+    let adjustedReward = characterStore.calculateReward(orderData.order.reward)
+    let adjustedReputation = characterStore.calculateReward(orderData.order.reputationReward)
+    
+    if (isPerfect) {
+      adjustedReward = Math.floor(adjustedReward * 2)
+      adjustedReputation = Math.floor(adjustedReputation * 2)
+    }
+    
+    adjustedReward = Math.floor(adjustedReward * rewardMultiplier)
+    adjustedReputation = Math.floor(adjustedReputation * rewardMultiplier)
 
     gameStore.addMoney(adjustedReward)
     gameStore.addReputation(adjustedReputation)

@@ -110,6 +110,15 @@ function handleEquipSkill(skillId: string) {
   }
 }
 
+function handleUseEquippedSkill() {
+  audioManager.playClick()
+  const result = characterStore.useEquippedSkill()
+  showSkillResultMessage(result.message)
+  if (result.success && result.newLevel) {
+    showLevelUp(result.message)
+  }
+}
+
 function showLevelUp(message: string) {
   levelUpMessage.value = message
   showLevelUpAnimation.value = true
@@ -226,6 +235,86 @@ function getUnlockProgress(char: Character): number {
         </div>
 
         <div class="lg:col-span-3 space-y-6">
+          <div
+            v-if="characterStore.activeBuffs.length > 0 || characterStore.pendingAnomalyImmunity || characterStore.pendingPerfectComplete || characterStore.doubleAllRemainingDays > 0"
+            class="bg-gradient-to-r from-purple-900/50 to-blue-900/50 rounded-2xl p-4 border border-purple-500/30"
+          >
+            <h3 class="text-lg font-bold text-amber-400 mb-3">✨ 当前激活效果</h3>
+            <div class="flex flex-wrap gap-3">
+              <div
+                v-if="characterStore.pendingAnomalyImmunity"
+                class="flex items-center gap-2 px-4 py-2 bg-blue-900/60 rounded-lg border border-blue-400/50"
+              >
+                <span class="text-xl">🛡️</span>
+                <div>
+                  <div class="text-sm font-medium text-blue-200">异常免疫</div>
+                  <div class="text-xs text-blue-300">下一次处理有效</div>
+                </div>
+              </div>
+              <div
+                v-if="characterStore.pendingPerfectComplete"
+                class="flex items-center gap-2 px-4 py-2 bg-amber-900/60 rounded-lg border border-amber-400/50"
+              >
+                <span class="text-xl">⭐</span>
+                <div>
+                  <div class="text-sm font-medium text-amber-200">完美完成</div>
+                  <div class="text-xs text-amber-300">下一个订单双倍奖励</div>
+                </div>
+              </div>
+              <div
+                v-if="characterStore.doubleAllRemainingDays > 0"
+                class="flex items-center gap-2 px-4 py-2 bg-red-900/60 rounded-lg border border-red-400/50"
+              >
+                <span class="text-xl">🔥</span>
+                <div>
+                  <div class="text-sm font-medium text-red-200">效果翻倍</div>
+                  <div class="text-xs text-red-300">剩余 {{ characterStore.doubleAllRemainingDays }} 天</div>
+                </div>
+              </div>
+              <div
+                v-for="buff in characterStore.activeBuffs"
+                :key="buff.id"
+                class="flex items-center gap-2 px-4 py-2 bg-gray-800/80 rounded-lg border border-gray-500/50"
+              >
+                <span class="text-xl">{{ buff.icon }}</span>
+                <div>
+                  <div class="text-sm font-medium text-gray-200">{{ buff.name }}</div>
+                  <div class="text-xs text-gray-400">+{{ buff.value }}% · 剩余 {{ buff.remainingTurns }} 回合</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="characterStore.equippedSkill" class="bg-gradient-to-r from-green-900/30 to-emerald-900/30 rounded-2xl p-4 border border-green-500/30">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-4">
+                <div class="w-14 h-14 rounded-xl flex items-center justify-center text-3xl bg-green-800/50 border border-green-500/50">
+                  {{ characterStore.equippedSkill.icon }}
+                </div>
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-lg font-bold text-green-300">{{ characterStore.equippedSkill.name }}</span>
+                    <span class="text-xs px-2 py-0.5 bg-green-700 text-green-200 rounded">
+                      已装备
+                    </span>
+                    <span class="text-xs text-green-400">Lv.{{ characterStore.equippedSkill.level }}/{{ characterStore.equippedSkill.maxLevel }}</span>
+                  </div>
+                  <p class="text-sm text-gray-400">{{ characterStore.equippedSkill.description }}</p>
+                  <div v-if="characterStore.equippedSkill.currentCooldown > 0" class="text-xs text-red-400 mt-1">
+                    ⏳ 冷却中：还需 {{ characterStore.equippedSkill.currentCooldown }} 天
+                  </div>
+                </div>
+              </div>
+              <button
+                @click="handleUseEquippedSkill"
+                class="px-6 py-3 bg-green-600 hover:bg-green-500 rounded-xl font-bold text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                :disabled="characterStore.equippedSkill.currentCooldown > 0 || characterStore.equippedSkill.level === 0"
+              >
+                ⚡ 使用技能
+              </button>
+            </div>
+          </div>
+
           <div v-if="selectedCharacter" class="rounded-2xl overflow-hidden border border-gray-700">
             <div
               class="p-6 bg-gradient-to-r"

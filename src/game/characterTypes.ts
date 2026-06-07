@@ -4,6 +4,8 @@ export type AttributeType = 'sanity' | 'reputation' | 'money' | 'efficiency' | '
 
 export type SkillType = 'passive' | 'active' | 'combat'
 
+export type BuffType = 'processing_speed' | 'sanity_protection' | 'reward_multiplier' | 'anomaly_resistance' | 'anomaly_immunity' | 'perfect_complete' | 'double_all' | 'invincible'
+
 export interface CharacterAttribute {
   type: AttributeType
   name: string
@@ -30,6 +32,17 @@ export interface CharacterSkill {
     special?: string
   }
   upgradeCost: ResourceCost
+}
+
+export interface ActiveBuff {
+  id: string
+  name: string
+  icon: string
+  type: BuffType
+  value: number
+  remainingTurns: number
+  sourceSkillId: string
+  description: string
 }
 
 export interface ResourceCost {
@@ -100,4 +113,9 @@ export interface CharacterSaveData {
     money: number
     reputation: number
   }
+  activeBuffs: ActiveBuff[]
+  pendingPerfectComplete: boolean
+  pendingAnomalyImmunity: boolean
+  currentOrderRewardMultiplier: number
+  doubleAllRemainingDays: number
 }

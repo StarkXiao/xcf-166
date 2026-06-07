@@ -548,9 +548,12 @@ async function startProcessing(startProgressOrEvent?: number | Event) {
   const startTime = Date.now() - adjustedStart
 
   if (startProgress === 0) {
-    const anomalyChance = characterStore.calculateAnomalyResistance(0.3)
-    if (Math.random() < anomalyChance) {
-      eventStore.triggerProcessingAnomaly()
+    const immunityConsumed = characterStore.consumeAnomalyImmunity()
+    if (!immunityConsumed) {
+      const anomalyChance = characterStore.calculateAnomalyResistance(0.3)
+      if (Math.random() < anomalyChance) {
+        eventStore.triggerProcessingAnomaly()
+      }
     }
   }
 

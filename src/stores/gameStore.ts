@@ -140,7 +140,7 @@ export const useGameStore = defineStore('game', () => {
     const eventStore = useEventStore()
     const characterStore = useCharacterStore()
 
-    const characterData = characterStore.saveCharacters()
+    const characterData = characterStore.getSaveData()
 
     const saveData: SaveData = {
       stats: { ...stats.value },
@@ -183,7 +183,7 @@ export const useGameStore = defineStore('game', () => {
 
       if (data.characterData) {
         const characterStore = useCharacterStore()
-        characterStore.loadCharacters()
+        characterStore.restoreFromSaveData(data.characterData)
       }
 
       return data
@@ -200,7 +200,6 @@ export const useGameStore = defineStore('game', () => {
   function deleteSave() {
     localStorage.removeItem(SAVE_KEY)
     const characterStore = useCharacterStore()
-    characterStore.deleteCharacterSave()
     characterStore.resetCharacters()
   }
 
