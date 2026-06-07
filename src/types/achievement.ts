@@ -92,6 +92,8 @@ export type BehaviorEventType =
   | 'page_view'
   | 'button_click'
   | 'reward_claimed'
+  | 'shop_purchase'
+  | 'item_used'
   | 'custom'
 
 export interface BehaviorEvent {

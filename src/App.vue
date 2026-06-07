@@ -5,7 +5,7 @@ import { useSeasonStore } from '@/stores/seasonStore'
 import { useCharacterStore } from '@/stores/characterStore'
 import AchievementUnlockPopup from '@/components/achievement/AchievementUnlockPopup.vue'
 import NotificationCenter from '@/components/achievement/NotificationCenter.vue'
-import { Bell, Trophy } from 'lucide-vue-next'
+import { Bell, Trophy, Store } from 'lucide-vue-next'
 import { useRouter, useRoute } from 'vue-router'
 
 const achievementStore = useAchievementStore()
@@ -30,6 +30,10 @@ function toggleNotificationCenter() {
 function goToAchievements() {
   router.push('/achievements')
 }
+
+function goToShop() {
+  router.push('/shop')
+}
 </script>
 
 <template>
@@ -38,6 +42,15 @@ function goToAchievements() {
       v-if="showNav"
       class="fixed top-4 right-4 z-40 flex items-center gap-3"
     >
+      <button
+        @click="goToShop"
+        class="relative p-3 bg-gray-900/90 backdrop-blur-sm rounded-xl border border-gray-700 hover:bg-gray-800 transition-colors group"
+        :class="{ 'ring-2 ring-amber-500': route.name === 'shop' }"
+        title="道具商城"
+      >
+        <Store class="w-5 h-5 text-amber-400 group-hover:text-amber-300" />
+      </button>
+
       <button
         @click="goToAchievements"
         class="relative p-3 bg-gray-900/90 backdrop-blur-sm rounded-xl border border-gray-700 hover:bg-gray-800 transition-colors group"

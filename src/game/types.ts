@@ -1,4 +1,5 @@
 import type { CharacterSaveData } from './characterTypes'
+import type { ShopItem, DiscountConfig, ShopOrder, InventoryItem } from '../types/shop'
 
 export type TimePhase = 'day' | 'night'
 
@@ -78,6 +79,14 @@ export interface OrderWithRelic {
   relic: Relic
 }
 
+export interface ShopSaveData {
+  items: ShopItem[]
+  discounts: DiscountConfig[]
+  orders: ShopOrder[]
+  inventory: InventoryItem[]
+  purchaseHistory: Record<string, number>
+}
+
 export interface SaveData {
   stats: GameStats
   timePhase: TimePhase
@@ -93,6 +102,7 @@ export interface SaveData {
   eventHistory: GameEvent[]
   eventResultMessage: string | null
   characterData: CharacterSaveData | null
+  shopData: ShopSaveData | null
   timestamp: number
   version: string
 }

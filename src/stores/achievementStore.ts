@@ -67,6 +67,8 @@ const conditionTypeMap: Record<BehaviorEventType, AchievementConditionType[]> = 
   page_view: [],
   button_click: [],
   reward_claimed: [],
+  shop_purchase: [],
+  item_used: [],
   custom: ['custom_event', 'relic_type_collect']
 }
 
@@ -675,10 +677,6 @@ export const useAchievementStore = defineStore('achievement', () => {
     trackBehavior('day_passed', { amount: gameStore.stats.day })
     trackBehavior('reputation_gained', { amount: 0 })
     trackBehavior('money_earned', { amount: 0 })
-    trackBehavior('night_fell', { amount: 0 })
-    trackBehavior('sanity_recovered', { amount: 0 })
-    trackBehavior('exp_gained', { amount: 0 })
-    trackBehavior('level_up', { amount: 0 })
 
     if (seasonStore.playerSeason) {
       trackBehavior('season_level_up', { level: seasonStore.playerSeason.level })
@@ -688,19 +686,7 @@ export const useAchievementStore = defineStore('achievement', () => {
       if (c.unlocked) {
         trackBehavior('character_unlocked', { characterId: c.id })
       }
-      c.skills.forEach(s => {
-        if (s.unlocked && s.level > 0) {
-          trackBehavior('skill_upgraded', { amount: 0 })
-        }
-      })
     })
-
-    if (perfectCompleteCount.value > 0) {
-      trackBehavior('perfect_completed', { amount: 0 })
-    }
-    if (anomalyResistCount.value > 0) {
-      trackBehavior('anomaly_resisted', { amount: 0 })
-    }
   }
 
   return {

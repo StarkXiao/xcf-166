@@ -6,9 +6,10 @@ import { useEventStore } from './eventStore'
 import { useSeasonStore } from './seasonStore'
 import { useCharacterStore } from './characterStore'
 import { useAchievementStore } from './achievementStore'
+import { useShopStore } from './shopStore'
 
 const SAVE_KEY = 'b2_morgue_save'
-const SAVE_VERSION = '2.1.0'
+const SAVE_VERSION = '2.2.0'
 
 export const useGameStore = defineStore('game', () => {
   const timePhase = ref<TimePhase>('day')
@@ -61,6 +62,8 @@ export const useGameStore = defineStore('game', () => {
       totalOrdersCompleted: 0,
       totalRelicsProcessed: 0
     }
+    const shopStore = useShopStore()
+    shopStore.resetShop()
   }
 
   function addMoney(amount: number) {
@@ -160,8 +163,10 @@ export const useGameStore = defineStore('game', () => {
     const orderStore = useOrderStore()
     const eventStore = useEventStore()
     const characterStore = useCharacterStore()
+    const shopStore = useShopStore()
 
     const characterData = characterStore.getSaveData()
+    const shopData = shopStore.getShopSaveData()
 
     const saveData: SaveData = {
       stats: { ...stats.value },
@@ -178,6 +183,7 @@ export const useGameStore = defineStore('game', () => {
       eventHistory: JSON.parse(JSON.stringify(eventStore.eventHistory)),
       eventResultMessage: eventStore.eventResultMessage,
       characterData,
+      shopData,
       timestamp: Date.now(),
       version: SAVE_VERSION
     }
@@ -207,6 +213,11 @@ export const useGameStore = defineStore('game', () => {
         characterStore.restoreFromSaveData(data.characterData)
       }
 
+      if (data.shopData) {
+        const shopStore = useShopStore()
+        shopStore.restoreFromSave(data.shopData)
+      }
+
       return data
     } catch {
       console.error('存档读取失败')
@@ -222,6 +233,8 @@ export const useGameStore = defineStore('game', () => {
     localStorage.removeItem(SAVE_KEY)
     const characterStore = useCharacterStore()
     characterStore.resetCharacters()
+    const shopStore = useShopStore()
+    shopStore.resetShop()
   }
 
   return {

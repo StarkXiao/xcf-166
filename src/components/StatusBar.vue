@@ -77,10 +77,21 @@ function goToCharacter() {
   router.push('/character')
 }
 
+function goToShop() {
+  audioManager.playClick()
+  router.push('/shop')
+}
+
 function handleGoToCharacter() {
   audioManager.playClick()
   showSaveMenu.value = false
   router.push('/character')
+}
+
+function handleGoToShop() {
+  audioManager.playClick()
+  showSaveMenu.value = false
+  router.push('/shop')
 }
 
 const phaseButtonText = () => {
@@ -138,6 +149,17 @@ const phaseButtonText = () => {
         </div>
 
         <button
+          @click="goToShop"
+          class="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 rounded text-sm font-medium text-white transition-colors"
+          :disabled="gameStore.isProcessing"
+          :class="{ 'opacity-50 cursor-not-allowed': gameStore.isProcessing }"
+          title="道具商城"
+        >
+          <span>🏪</span>
+          <span class="hidden sm:inline">商城</span>
+        </button>
+
+        <button
           @click="goToCharacter"
           class="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded text-sm font-medium text-white transition-colors"
           :disabled="gameStore.isProcessing"
@@ -177,6 +199,12 @@ const phaseButtonText = () => {
                 class="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-gray-700 transition-colors"
               >
                 💾 保存游戏
+              </button>
+              <button
+                @click="handleGoToShop"
+                class="w-full px-4 py-2 text-left text-sm text-amber-400 hover:bg-amber-900/30 transition-colors"
+              >
+                🏪 道具商城
               </button>
               <button
                 @click="handleGoToCharacter"
