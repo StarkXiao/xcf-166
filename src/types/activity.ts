@@ -178,11 +178,57 @@ export interface ActivityLog {
   timestamp: number
 }
 
+export type TrackEventType = 'exposure' | 'click' | 'claim' | 'complete' | 'view' | 'error'
+
+export interface ActivityEvent {
+  id: string
+  activityId: string
+  playerId: string
+  eventType: TrackEventType
+  elementId?: string
+  rewardId?: string
+  pageUrl?: string
+  userAgent?: string
+  ipAddress?: string
+  metadata: Record<string, any>
+  timestamp: number
+  sessionId?: string
+}
+
+export interface EventQueryParams {
+  activityId?: string
+  playerId?: string
+  eventType?: TrackEventType
+  startTime?: number
+  endTime?: number
+  elementId?: string
+  page?: number
+  pageSize?: number
+}
+
+export interface AggregatedStatistics {
+  activityId: string
+  totalExposures: number
+  totalClicks: number
+  totalClaims: number
+  totalCompletions: number
+  totalPageViews: number
+  uniqueVisitors: number
+  clickThroughRate: number
+  conversionRate: number
+  averageDuration: number
+  rewardDistribution: Record<string, number>
+  topClickedElements: Array<{ elementId: string; count: number }>
+  hourlyData: Array<{ hour: string; exposures: number; clicks: number; claims: number }>
+  dailyData: Array<{ date: string; exposures: number; clicks: number; claims: number }>
+}
+
 export interface ActivityState {
   templates: ActivityTemplate[]
   activities: Activity[]
   currentActivity: Activity | null
   statistics: Record<string, ActivityStatistics>
   logs: ActivityLog[]
+  events: ActivityEvent[]
   loading: boolean
 }

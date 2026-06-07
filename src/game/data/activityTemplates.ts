@@ -1,4 +1,4 @@
-import type { ActivityTemplate, Activity, ActivityStatistics, ActivityLog } from '@/types/activity'
+import type { ActivityTemplate, Activity, ActivityStatistics, ActivityLog, ActivityEvent, TrackEventType } from '@/types/activity'
 
 const now = Date.now()
 const day = 24 * 60 * 60 * 1000
@@ -318,3 +318,56 @@ export const mockLogs: ActivityLog[] = [
     timestamp: now - 10800 * 1000,
   },
 ]
+
+export function generateMockEvents(): ActivityEvent[] {
+  const events: ActivityEvent[] = []
+  const activityIds = ['act_001', 'act_002', 'act_004']
+  const eventTypes: TrackEventType[] = ['exposure', 'click', 'claim', 'complete']
+  const elementIds = ['el_act_001_btn', 'tab_rewards', 'tab_tasks', 'signin_btn', 'gacha_btn_1', 'gacha_btn_10']
+  const rewardIds = ['rw_act_001_1', 'rw_act_001_2', 'rw_act_002_1']
+
+  let eventId = 0
+
+  for (let i = 0; i < 500; i++) {
+    const activityId = activityIds[Math.floor(Math.random() * activityIds.length)]
+    const eventType = eventTypes[Math.floor(Math.random() * eventTypes.length)]
+    const playerId = `p_${10000 + Math.floor(Math.random() * 1000)}`
+    const timestamp = now - Math.floor(Math.random() * 7 * 24 * 60 * 60 * 1000)
+
+    const event: ActivityEvent = {
+      id: `evt_${++eventId}`,
+      activityId,
+      playerId,
+      eventType,
+      metadata: {
+        source: ['banner', 'push', 'direct', 'menu'][Math.floor(Math.random() * 4)],
+      device: ['mobile', 'desktop'][Math.floor(Math.random() * 2)],
+      sessionId: `sess_${Math.random().toString(36).slice(2, 10)}`,
+      },
+      timestamp,
+    }
+
+    if (eventType === 'click') {
+      event.elementId = elementIds[Math.floor(Math.random() * elementIds.length)]
+      event.metadata.x = Math.floor(Math.random() * 400)
+      event.metadata.y = Math.floor(Math.random() * 800)
+    }
+
+    if (eventType === 'claim') {
+      event.rewardId = rewardIds[Math.floor(Math.random() * rewardIds.length)]
+      event.metadata.value = Math.floor(Math.random() * 1000)
+      event.metadata.rewardName = ['100金币', '50钻石', '稀有道具'][Math.floor(Math.random() * 3)]
+    }
+
+    if (eventType === 'complete') {
+      event.metadata.taskId = `task_${Math.floor(Math.random() * 10)}`
+      event.metadata.duration = Math.floor(Math.random() * 600)
+    }
+
+    events.push(event)
+  }
+
+  events.sort((a, b) => b.timestamp - a.timestamp)
+
+  return events
+}

@@ -1,33 +1,34 @@
 <template>
-  <div class="space-y-6">
-    <div class="flex items-center justify-between">
-      <div class="flex items-center gap-4">
-        <button
-          @click="goBack"
-          class="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
-        >
-          <ArrowLeft class="w-5 h-5" />
-        </button>
-        <div>
-          <h2 class="text-xl font-semibold">{{ activity?.config.name || '新建活动' }}</h2>
-          <p class="text-sm text-gray-400">{{ activityId ? `活动ID: ${activityId}` : '' }}</p>
+  <div class="min-h-screen">
+    <div v-if="activity" class="space-y-6">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <button
+            @click="goBack"
+            class="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+          >
+            <ArrowLeft class="w-5 h-5" />
+          </button>
+          <div>
+            <h2 class="text-xl font-semibold">{{ activity.config.name || '新建活动' }}</h2>
+            <p class="text-sm text-gray-400">{{ activityId ? `活动ID: ${activityId}` : '' }}</p>
+          </div>
         </div>
-      </div>
-      <div class="flex items-center gap-3">
-        <button
-          v-if="activity?.status === 'draft'"
-          @click="saveActivity"
-          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
-        >
-          保存草稿
-        </button>
-        <button
-          v-if="activity?.status === 'draft'"
-          @click="submitForApproval"
-          class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-        >
-          提交审核
-        </button>
+        <div class="flex items-center gap-3">
+          <button
+            v-if="activity.status === 'draft'"
+            @click="saveActivity"
+            class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+          >
+            保存草稿
+          </button>
+          <button
+            v-if="activity.status === 'draft'"
+            @click="submitForApproval"
+            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+          >
+            提交审核
+          </button>
         <button
           v-if="activity?.status === 'pending'"
           @click="approve"
@@ -52,7 +53,7 @@
       </div>
     </div>
 
-    <div v-if="activity" class="flex gap-4">
+    <div class="flex gap-4">
       <div class="flex-1 space-y-6">
         <div class="bg-gray-800 rounded-xl border border-gray-700 p-6">
           <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -205,12 +206,45 @@
         </div>
       </div>
     </div>
+    </div>
+    <div v-if="showTemplateModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+      <div class="bg-gray-800 rounded-2xl p-8 max-w-4xl w-full mx-4 border border-gray-700">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h2 class="text-2xl font-bold text-white">选择活动模板</h2>
+            <p class="text-sm text-gray-400 mt-1">选择一个模板快速创建活动</p>
+          </div>
+          <button @click="goBack" class="p-2 text-gray-400 hover:text-white transition-colors">
+            <X class="w-6 h-6" />
+          </button>
+        </div>
+        <div class="grid grid-cols-3 gap-4">
+          <div
+            v-for="template in activityStore.templates"
+            :key="template.id"
+            @click="selectTemplate(template.id)"
+            class="p-5 bg-gray-700/50 rounded-xl border-2 border-transparent hover:border-purple-500 cursor-pointer transition-all group"
+          >
+            <div class="flex items-center gap-4 mb-3">
+              <div class="w-12 h-12 rounded-lg bg-purple-600/20 flex items-center justify-center group-hover:bg-purple-600/40 transition-colors">
+                <component :is="getTemplateIconComponent(template.icon)" class="w-6 h-6 text-purple-400" />
+              </div>
+              <div>
+                <h4 class="font-medium text-white">{{ template.name }}</h4>
+                <p class="text-xs text-gray-400">{{ template.type }}</p>
+              </div>
+            </div>
+            <p class="text-sm text-gray-400">{{ template.description }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, FileText, Play, Pause, Square, Clock, FileText as FileTextIcon } from 'lucide-vue-next'
+import { ArrowLeft, FileText, Play, Pause, Square, Clock, FileText as FileTextIcon, X, Trophy, Calendar, CheckSquare, Gift, ShoppingBag, Layout } from 'lucide-vue-next'
 import { useActivityStore } from '@/stores/activityStore'
 import type { ActivityStatus, TimeSchedule, ConditionGroup, RewardRule, PageConfig } from '@/types/activity'
 import TimeScheduleConfig from '@/components/admin/TimeScheduleConfig.vue'
@@ -222,8 +256,27 @@ const route = useRoute()
 const router = useRouter()
 const activityStore = useActivityStore()
 
-const activityId = computed(() => route.params.id as string)
-const activity = ref(activityStore.getActivityById(activityId.value))
+const isNewRoute = route.name === 'admin-activity-new' || route.params.id === 'new'
+const activityId = computed(() => route.params.id as string | undefined)
+const isNewActivity = computed(() => isNewRoute || activityId.value === 'new')
+const showTemplateModal = ref(isNewRoute)
+const activity = ref<ReturnType<typeof activityStore.getActivityById>>(
+  isNewRoute ? null : activityStore.getActivityById(route.params.id as string)
+)
+
+watch(
+  [() => route.name, () => route.params.id],
+  ([name, id]) => {
+    const isNew = name === 'admin-activity-new' || id === 'new'
+    if (isNew) {
+      showTemplateModal.value = true
+      activity.value = null
+    } else if (id) {
+      showTemplateModal.value = false
+      activity.value = activityStore.getActivityById(id as string)
+    }
+  }
+)
 
 const audienceTags = ref('')
 const playerLevelMin = ref<number | undefined>(undefined)
@@ -382,8 +435,31 @@ watch([vipLevelMin, vipLevelMax], ([min, max]) => {
   }
 })
 
+function getTemplateIconComponent(iconName: string) {
+  const icons: Record<string, any> = {
+    Trophy,
+    Calendar,
+    CheckSquare,
+    Gift,
+    ShoppingBag,
+    Layout,
+  }
+  return icons[iconName] || Layout
+}
+
+function selectTemplate(templateId: string) {
+  const newActivity = activityStore.createActivity(templateId)
+  activity.value = newActivity
+  showTemplateModal.value = false
+  router.replace(`/admin/activities/${newActivity.id}`)
+}
+
 onMounted(() => {
-  if (!activity.value) {
+  const isNew = route.name === 'admin-activity-new' || route.params.id === 'new'
+  const id = route.params.id as string | undefined
+  if (isNew) {
+    showTemplateModal.value = true
+  } else if (id && !activity.value) {
     router.push('/admin/activities')
   }
 })
