@@ -4,6 +4,7 @@ import SeasonPage from '@/pages/SeasonPage.vue'
 import CharacterPage from '@/pages/CharacterPage.vue'
 import AchievementPage from '@/pages/AchievementPage.vue'
 import ShopPage from '@/pages/ShopPage.vue'
+import FriendPage from '@/pages/FriendPage.vue'
 import AdminLayout from '@/components/admin/AdminLayout.vue'
 import ActivityListPage from '@/pages/admin/ActivityListPage.vue'
 import ActivityEditPage from '@/pages/admin/ActivityEditPage.vue'
@@ -35,6 +36,11 @@ const routes: RouteRecordRaw[] = [
     path: '/achievements',
     name: 'achievements',
     component: AchievementPage,
+  },
+  {
+    path: '/friends',
+    name: 'friends',
+    component: FriendPage,
   },
   {
     path: '/shop',

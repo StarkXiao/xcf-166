@@ -5,10 +5,13 @@ import { useSeasonStore } from '@/stores/seasonStore'
 import { useCharacterStore } from '@/stores/characterStore'
 import { useTutorialStore } from '@/stores/tutorialStore'
 import { useGameStore } from '@/stores/gameStore'
+import { useFriendStore } from '@/stores/friendStore'
 import AchievementUnlockPopup from '@/components/achievement/AchievementUnlockPopup.vue'
 import NotificationCenter from '@/components/achievement/NotificationCenter.vue'
+import FriendNotificationCenter from '@/components/friend/FriendNotificationCenter.vue'
+import FriendEntryCard from '@/components/friend/FriendEntryCard.vue'
 import TutorialGuide from '@/components/tutorial/TutorialGuide.vue'
-import { Bell, Trophy, Store, HelpCircle } from 'lucide-vue-next'
+import { Bell, Trophy, Store, HelpCircle, Heart, Users } from 'lucide-vue-next'
 import { useRouter, useRoute } from 'vue-router'
 
 const achievementStore = useAchievementStore()
@@ -16,11 +19,14 @@ const seasonStore = useSeasonStore()
 const characterStore = useCharacterStore()
 const tutorialStore = useTutorialStore()
 const gameStore = useGameStore()
+const friendStore = useFriendStore()
 const router = useRouter()
 const route = useRoute()
 
 const showNotificationCenter = ref(false)
+const showFriendNotificationCenter = ref(false)
 const showNav = computed(() => route.name === 'game')
+const showFriendEntry = computed(() => route.name === 'game')
 const tutorialGuideRef = ref<InstanceType<typeof TutorialGuide> | null>(null)
 
 onMounted(() => {
@@ -28,6 +34,7 @@ onMounted(() => {
   achievementStore.initAchievements(characterStore.activeCharacter?.id || 'player_local')
   achievementStore.resyncProgress()
   tutorialStore.initTutorial(characterStore.activeCharacter?.id || 'player_local')
+  friendStore.initFriendSystem(characterStore.activeCharacter?.id || 'player_local')
 
   if (!tutorialStore.isCompleted && tutorialStore.analytics.firstLogin) {
     setTimeout(() => {
@@ -68,6 +75,14 @@ function goToAchievements() {
 function goToShop() {
   router.push('/shop')
 }
+
+function goToFriends() {
+  router.push('/friends')
+}
+
+function toggleFriendNotificationCenter() {
+  showFriendNotificationCenter.value = !showFriendNotificationCenter.value
+}
 </script>
 
 <template>
@@ -97,6 +112,35 @@ function goToShop() {
           class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold animate-pulse"
         >
           {{ achievementStore.unclaimedCount }}
+        </span>
+      </button>
+
+      <button
+        @click="goToFriends"
+        class="friend-entry-btn relative p-3 bg-gray-900/90 backdrop-blur-sm rounded-xl border border-gray-700 hover:bg-gray-800 transition-colors group"
+        :class="{ 'ring-2 ring-pink-500': route.name === 'friends' }"
+        title="好友协作"
+      >
+        <Heart class="w-5 h-5 text-pink-400 group-hover:text-pink-300" />
+        <span
+          v-if="friendStore.totalUnreadCount > 0"
+          class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold animate-pulse"
+        >
+          {{ friendStore.totalUnreadCount }}
+        </span>
+      </button>
+
+      <button
+        @click="toggleFriendNotificationCenter"
+        class="relative p-3 bg-gray-900/90 backdrop-blur-sm rounded-xl border border-gray-700 hover:bg-gray-800 transition-colors"
+        title="好友消息"
+      >
+        <Users class="w-5 h-5 text-gray-400 hover:text-white" />
+        <span
+          v-if="friendStore.unreadNotificationCount > 0"
+          class="absolute -top-1 -right-1 w-5 h-5 bg-pink-500 text-white text-xs rounded-full flex items-center justify-center font-bold"
+        >
+          {{ friendStore.unreadNotificationCount }}
         </span>
       </button>
 
@@ -131,13 +175,20 @@ function goToShop() {
       @close="showNotificationCenter = false"
     />
 
+    <FriendNotificationCenter
+      :show="showFriendNotificationCenter"
+      @close="showFriendNotificationCenter = false"
+    />
+
     <TutorialGuide ref="tutorialGuideRef" />
+
+    <FriendEntryCard v-if="showFriendEntry" />
 
     <button
       v-if="!tutorialStore.isCompleted && !tutorialStore.state.isActive"
-      @click="restartTutorial"
-      class="fixed bottom-6 left-6 z-40 p-3 bg-gray-900/90 backdrop-blur-sm border border-gray-700 hover:bg-gray-800 rounded-xl transition-all text-gray-400 hover:text-white flex items-center gap-2"
+      class="fixed bottom-6 left-24 z-40 p-3 bg-gray-900/90 backdrop-blur-sm border border-gray-700 hover:bg-gray-800 rounded-xl transition-all text-gray-400 hover:text-white flex items-center gap-2"
       title="重新开始新手引导"
+      @click="restartTutorial"
     >
       <HelpCircle class="w-5 h-5" />
       <span class="text-sm">新手引导</span>
