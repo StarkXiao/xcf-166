@@ -6,7 +6,7 @@ export type FriendNotificationType = 'invite' | 'task_request' | 'task_accepted'
 
 export type MutualTaskBehaviorType = 'order_completed' | 'relic_purified' | 'sanity_recovered' | 'reputation_gained' | 'money_gifted'
 
-export type FriendActivityType = 'help_sent' | 'help_received' | 'task_completed' | 'milestone_unlocked' | 'reward_claimed' | 'friend_added' | 'friend_removed'
+export type FriendActivityType = 'help_sent' | 'help_received' | 'task_completed' | 'milestone_unlocked' | 'reward_claimed' | 'friend_added' | 'friend_removed' | 'money_gifted'
 
 export interface MutualTaskReward {
   type: 'currency' | 'item' | 'badge' | 'title' | 'exp' | 'buff'

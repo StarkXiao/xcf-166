@@ -213,35 +213,37 @@ export const useFriendStore = defineStore('friend', () => {
     })
 
     if (mockFriends.length >= 2) {
-      const task = availableMutualTasks.value[0]
-      const friend = mockFriends[0]
-      const mockTaskProgress: MutualTaskProgress = {
-        id: generateId('task'),
-        taskId: task.id,
-        initiatorId: friend.friendId,
-        initiatorName: friend.friendName,
-        helperId: playerId.value,
-        helperName: playerName.value,
-        status: 'requested',
-        progress: 0,
-        helperProgress: 0,
-        startedAt: now - 1800000,
-        expiresAt: now + task.duration * 1000,
-        initiatorBonusApplied: false,
-        helperBonusApplied: false,
-        requestMessage: '嗨，帮我处理一个订单吧，有奖励哦！'
-      }
-      mutualTaskProgresses.value = [mockTaskProgress]
+      const moneyGiftTask = availableMutualTasks.value.find(t => t.behaviorType === 'money_gifted')
+      if (moneyGiftTask) {
+        const friend = mockFriends[1]
+        const mockTaskProgress: MutualTaskProgress = {
+          id: generateId('task'),
+          taskId: moneyGiftTask.id,
+          initiatorId: friend.friendId,
+          initiatorName: friend.friendName,
+          helperId: playerId.value,
+          helperName: playerName.value,
+          status: 'requested',
+          progress: 0,
+          helperProgress: 0,
+          startedAt: now - 1800000,
+          expiresAt: now + moneyGiftTask.duration * 1000,
+          initiatorBonusApplied: false,
+          helperBonusApplied: false,
+          requestMessage: '最近生意不太好，能不能先借我1000金币周转一下，必有重谢！'
+        }
+        mutualTaskProgresses.value = [mockTaskProgress]
 
-      addNotification({
-        type: 'task_request',
-        title: '🤝 互助请求',
-        message: `${friend.friendName} 邀请你协助「${task.title}」`,
-        fromPlayerId: friend.friendId,
-        fromPlayerName: friend.friendName,
-        fromPlayerAvatar: friend.friendAvatar,
-        data: { taskProgressId: mockTaskProgress.id, taskId: task.id }
-      })
+        addNotification({
+          type: 'task_request',
+          title: '🤝 互助请求',
+          message: `${friend.friendName} 邀请你协助「${moneyGiftTask.title}」`,
+          fromPlayerId: friend.friendId,
+          fromPlayerName: friend.friendName,
+          fromPlayerAvatar: friend.friendAvatar,
+          data: { taskProgressId: mockTaskProgress.id, taskId: moneyGiftTask.id }
+        })
+      }
     }
   }
 
@@ -547,8 +549,8 @@ export const useFriendStore = defineStore('friend', () => {
 
     addNotification({
       type: 'task_request',
-      title: '🤝 互助请求',
-      message: `${playerName.value} 邀请你协助「${task.title}」`,
+      title: '🤝 互助请求已发送',
+      message: `你向 ${friend.friendName} 发起了「${task.title}」互助请求`,
       fromPlayerId: friend.friendId,
       fromPlayerName: friend.friendName,
       fromPlayerAvatar: friend.friendAvatar,
@@ -569,15 +571,12 @@ export const useFriendStore = defineStore('friend', () => {
     if (!task) return false
 
     const now = Date.now()
-    taskProgress.status = 'accepted'
+    taskProgress.status = 'in_progress'
     taskProgress.respondedAt = now
 
     const friend = friends.value.find(f => f.friendId === taskProgress.initiatorId)
     if (friend) {
       friend.lastInteractAt = now
-      if (task.behaviorType !== 'money_gifted') {
-        taskProgress.status = 'in_progress'
-      }
     }
 
     addActivity({
@@ -589,10 +588,10 @@ export const useFriendStore = defineStore('friend', () => {
     addNotification({
       type: 'task_accepted',
       title: '✅ 互助请求已接受',
-      message: `${playerName.value} 接受了你的「${task.title}」互助请求`,
+      message: `你接受了 ${taskProgress.initiatorName} 的「${task.title}」互助请求`,
       fromPlayerId: taskProgress.initiatorId,
       fromPlayerName: taskProgress.initiatorName,
-      fromPlayerAvatar: '🏛️',
+      fromPlayerAvatar: friend?.friendAvatar || '👤',
       data: { taskProgressId: taskProgress.id, taskId: task.id }
     })
 
@@ -603,7 +602,7 @@ export const useFriendStore = defineStore('friend', () => {
         message: `请向 ${taskProgress.initiatorName} 赠送 ${task.target} 金币完成互助`,
         fromPlayerId: taskProgress.initiatorId,
         fromPlayerName: taskProgress.initiatorName,
-        fromPlayerAvatar: '🏛️',
+        fromPlayerAvatar: friend?.friendAvatar || '👤',
         data: { taskProgressId: taskProgress.id, taskId: task.id, amount: task.target }
       })
     }
@@ -626,6 +625,8 @@ export const useFriendStore = defineStore('friend', () => {
     taskProgress.rejectedAt = now
     taskProgress.respondedAt = now
 
+    const friend = friends.value.find(f => f.friendId === taskProgress.initiatorId)
+
     addActivity({
       friendId: taskProgress.initiatorId,
       activityType: 'help_received',
@@ -634,11 +635,11 @@ export const useFriendStore = defineStore('friend', () => {
 
     addNotification({
       type: 'task_rejected',
-      title: '❌ 互助请求被拒绝',
-      message: `${playerName.value} 拒绝了你的「${task.title}」互助请求${reason ? `，原因：${reason}` : ''}`,
+      title: '❌ 互助请求已拒绝',
+      message: `你拒绝了 ${taskProgress.initiatorName} 的「${task.title}」互助请求${reason ? `，原因：${reason}` : ''}`,
       fromPlayerId: taskProgress.initiatorId,
       fromPlayerName: taskProgress.initiatorName,
-      fromPlayerAvatar: '🏛️',
+      fromPlayerAvatar: friend?.friendAvatar || '👤',
       data: { taskProgressId: taskProgress.id, taskId: task.id }
     })
 
@@ -679,10 +680,12 @@ export const useFriendStore = defineStore('friend', () => {
       description: `互助任务「${task.title}」已完成`
     })
 
+    const otherPlayerName = friend?.friendName || '好友'
+
     addNotification({
       type: 'task_completed',
       title: '✅ 互助任务完成',
-      message: `「${task.title}」已完成，快去领取奖励吧！`,
+      message: `与 ${otherPlayerName} 的「${task.title}」已完成，快去领取奖励吧！`,
       fromPlayerId: friend?.friendId || '',
       fromPlayerName: friend?.friendName || '',
       fromPlayerAvatar: friend?.friendAvatar || '',
@@ -692,7 +695,7 @@ export const useFriendStore = defineStore('friend', () => {
     addNotification({
       type: 'reward_available',
       title: '🎁 奖励待领取',
-      message: `「${task.title}」的奖励已准备好`,
+      message: `与 ${otherPlayerName} 的「${task.title}」奖励已准备好`,
       fromPlayerId: friend?.friendId || '',
       fromPlayerName: friend?.friendName || '',
       fromPlayerAvatar: friend?.friendAvatar || '',
@@ -740,7 +743,7 @@ export const useFriendStore = defineStore('friend', () => {
 
   function giftMoneyToFriend(taskProgressId: string): boolean {
     const taskProgress = mutualTaskProgresses.value.find(t => t.id === taskProgressId)
-    if (!taskProgress || (taskProgress.status !== 'accepted' && taskProgress.status !== 'in_progress')) {
+    if (!taskProgress || taskProgress.status !== 'in_progress') {
       return false
     }
 
@@ -759,6 +762,13 @@ export const useFriendStore = defineStore('friend', () => {
 
     taskProgress.helperProgress = amount
     taskProgress.progress = amount
+
+    addActivity({
+      friendId: taskProgress.initiatorId,
+      activityType: 'money_gifted',
+      description: `向 ${taskProgress.initiatorName} 赠送了 ${amount} 金币，完成「${task.title}」互助`
+    })
+
     completeMutualTask(taskProgress.id)
 
     return true
