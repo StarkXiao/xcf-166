@@ -138,7 +138,7 @@ const phaseButtonText = () => {
       </div>
 
       <div class="flex items-center gap-3">
-        <div class="text-center px-4 py-1 bg-gray-800 rounded">
+        <div class="time-display text-center px-4 py-1 bg-gray-800 rounded">
           <div class="text-xs text-gray-500">第 {{ gameStore.day }} 天</div>
           <div
             class="text-sm font-medium"
@@ -161,7 +161,7 @@ const phaseButtonText = () => {
 
         <button
           @click="goToCharacter"
-          class="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded text-sm font-medium text-white transition-colors"
+          class="character-avatar flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded text-sm font-medium text-white transition-colors"
           :disabled="gameStore.isProcessing"
           :class="{ 'opacity-50 cursor-not-allowed': gameStore.isProcessing }"
           title="角色养成"

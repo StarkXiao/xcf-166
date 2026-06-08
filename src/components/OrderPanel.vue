@@ -99,7 +99,7 @@ function handleSelect(orderId: string) {
               <div class="flex gap-1">
                 <button
                   @click="handleAccept(item.order.id)"
-                  class="px-3 py-1 bg-red-600 hover:bg-red-500 rounded text-xs font-medium transition-colors"
+                  class="accept-order-btn px-3 py-1 bg-red-600 hover:bg-red-500 rounded text-xs font-medium transition-colors"
                 >
                   接受
                 </button>

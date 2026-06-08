@@ -741,6 +741,16 @@ watch(() => gameStore.isLowSanity, (isLow) => {
         </div>
       </div>
 
+      <div v-if="gameStore.isProcessing" class="purification-progress mt-4">
+        <div class="text-xs text-gray-500 mb-1">净化进度</div>
+        <div class="h-2 bg-gray-800 rounded-full overflow-hidden">
+          <div
+            class="h-full bg-gradient-to-r from-red-500 to-amber-500 transition-all duration-300"
+            :style="{ width: `${gameStore.processingProgress}%` }"
+          />
+        </div>
+      </div>
+
       <button
         v-if="isPausedProcessing && currentProcessingStep && gameStore.isNight"
         @click="resumeProcessing"
@@ -761,10 +771,10 @@ watch(() => gameStore.isLowSanity, (isLow) => {
       从左侧选择一个遗物开始处理
     </div>
 
-    <div class="flex-1 relative overflow-hidden">
+    <div class="workbench-area flex-1 relative overflow-hidden">
       <canvas
         ref="canvasRef"
-        class="w-full h-full cursor-pointer"
+        class="relic-on-workbench w-full h-full cursor-pointer"
         @mousemove="handleMouseMove"
         @mouseenter="isMouseOnCanvas = true"
         @mouseleave="isMouseOnCanvas = false"

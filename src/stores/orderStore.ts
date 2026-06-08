@@ -5,6 +5,7 @@ import { getInitialOrders } from '../game/data/relics'
 import { useGameStore } from './gameStore'
 import { useSeasonStore } from './seasonStore'
 import { useCharacterStore } from './characterStore'
+import { useAchievementStore } from './achievementStore'
 
 export const useOrderStore = defineStore('order', () => {
   const gameStore = useGameStore()
@@ -38,6 +39,13 @@ export const useOrderStore = defineStore('order', () => {
     
     const seasonStore = useSeasonStore()
     seasonStore.updateTaskProgress('order_accept', 1)
+
+    const achievementStore = useAchievementStore()
+    achievementStore.trackBehavior('order_accepted', {
+      orderId,
+      relicType: orderData.relic.type,
+      reward: orderData.order.reward
+    })
     
     return true
   }
