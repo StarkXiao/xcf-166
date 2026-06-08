@@ -770,7 +770,7 @@ watch(() => gameStore.isLowSanity, (isLow) => {
       <button
         v-else-if="nextStep && !gameStore.isProcessing && gameStore.isNight"
         @click="startProcessing"
-        class="mt-4 w-full py-3 bg-red-600 hover:bg-red-500 rounded text-sm font-medium text-white transition-colors"
+        class="start-purification-btn mt-4 w-full py-3 bg-red-600 hover:bg-red-500 rounded text-sm font-medium text-white transition-colors"
       >
         开始：{{ stepIcon[nextStep.type] }} {{ nextStep.name }}
       </button>

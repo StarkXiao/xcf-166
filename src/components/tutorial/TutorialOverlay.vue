@@ -113,11 +113,53 @@ function handleOverlayClick() {
     <div
       v-if="show"
       class="tutorial-overlay fixed inset-0 z-50 pointer-events-none"
-      @click="handleOverlayClick"
     >
+      <template v-if="targetSelector && highlightRect">
+        <div
+          class="absolute bg-black/60 backdrop-blur-sm pointer-events-auto cursor-pointer transition-opacity duration-300"
+          :style="{
+            left: 0,
+            top: 0,
+            right: 0,
+            height: `${highlightRect.top - padding}px`
+          }"
+          @click="handleOverlayClick"
+        />
+        <div
+          class="absolute bg-black/60 backdrop-blur-sm pointer-events-auto cursor-pointer transition-opacity duration-300"
+          :style="{
+            left: 0,
+            top: `${highlightRect.bottom + padding}px`,
+            right: 0,
+            bottom: 0
+          }"
+          @click="handleOverlayClick"
+        />
+        <div
+          class="absolute bg-black/60 backdrop-blur-sm pointer-events-auto cursor-pointer transition-opacity duration-300"
+          :style="{
+            left: 0,
+            top: `${highlightRect.top - padding}px`,
+            width: `${highlightRect.left - padding}px`,
+            height: `${highlightRect.height + padding * 2}px`
+          }"
+          @click="handleOverlayClick"
+        />
+        <div
+          class="absolute bg-black/60 backdrop-blur-sm pointer-events-auto cursor-pointer transition-opacity duration-300"
+          :style="{
+            left: `${highlightRect.right + padding}px`,
+            top: `${highlightRect.top - padding}px`,
+            right: 0,
+            height: `${highlightRect.height + padding * 2}px`
+          }"
+          @click="handleOverlayClick"
+        />
+      </template>
       <div
-        class="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300"
-        :style="targetSelector ? cutoutStyle : {}"
+        v-else
+        class="absolute inset-0 bg-black/60 backdrop-blur-sm pointer-events-auto cursor-pointer transition-opacity duration-300"
+        @click="handleOverlayClick"
       />
 
       <div
@@ -146,9 +188,5 @@ function handleOverlayClick() {
     opacity: 0;
     transform: translateX(100%);
   }
-}
-
-.tutorial-overlay {
-  pointer-events: auto;
 }
 </style>

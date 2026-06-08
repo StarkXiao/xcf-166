@@ -379,7 +379,7 @@ export const tutorialSteps: TutorialStep[] = [
     description: '根据遗物的净化方法，按照屏幕提示完成操作。这是关键操作，必须实际完成净化才能继续。注意观察进度条和操作评分。不要着急，稳扎稳打才能获得高分！',
     triggerType: 'auto',
     actionType: 'highlight_element',
-    targetSelector: '.purification-progress',
+    targetSelector: '.start-purification-btn',
     position: 'bottom',
     canSkip: false,
     isBlocking: true,
