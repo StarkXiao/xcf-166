@@ -5,6 +5,7 @@ import { useGameStore } from '@/stores/gameStore'
 import { useEventStore } from '@/stores/eventStore'
 import { useCharacterStore } from '@/stores/characterStore'
 import { useAchievementStore } from '@/stores/achievementStore'
+import { useFriendStore } from '@/stores/friendStore'
 import { audioManager } from '@/game/audio'
 import type { Relic, ProcessingStep } from '@/game/types'
 
@@ -13,6 +14,7 @@ const gameStore = useGameStore()
 const eventStore = useEventStore()
 const characterStore = useCharacterStore()
 const achievementStore = useAchievementStore()
+const friendStore = useFriendStore()
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const animationId = ref<number | null>(null)
@@ -612,6 +614,10 @@ function completeStep(orderId: string, stepId: string) {
 
   if (allStepsCompleted.value && currentOrder.value) {
     achievementStore.trackBehavior('relic_purified', {
+      relicType: currentOrder.value.relic.type,
+      orderId: currentOrder.value.order.id
+    })
+    friendStore.onGameBehavior('relic_purified', 1, {
       relicType: currentOrder.value.relic.type,
       orderId: currentOrder.value.order.id
     })

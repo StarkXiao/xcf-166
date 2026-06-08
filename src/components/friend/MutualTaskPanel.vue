@@ -2,13 +2,21 @@
 import { ref, computed } from 'vue'
 import { useFriendStore } from '@/stores/friendStore'
 import type { MutualTask, MutualTaskProgress } from '@/types/friend'
-import { ListTodo, Users, Clock, Gift, ChevronRight, Check, Zap } from 'lucide-vue-next'
+import { ListTodo, Users, Clock, Gift, ChevronRight, Check, X, Play, Zap } from 'lucide-vue-next'
 
 const props = defineProps<{
   friendId?: string
 }>()
 
+const emit = defineEmits<{
+  (e: 'navigateTo', target: string): void
+}>()
+
 const friendStore = useFriendStore()
+
+function getTask(taskId: string): MutualTask | undefined {
+  return friendStore.availableMutualTasks.find(t => t.id === taskId)
+}
 
 const showTaskSelectModal = ref(false)
 const selectedTask = ref<MutualTask | null>(null)
@@ -155,14 +163,31 @@ function claimReward(taskProgressId: string) {
   friendStore.claimMutualTaskReward(taskProgressId)
 }
 
-function simulateHelperComplete(taskProgressId: string) {
-  if (confirm('模拟好友帮助完成任务？')) {
-    friendStore.completeTaskHelper(taskProgressId)
+function acceptHelp(taskProgressId: string) {
+  friendStore.acceptMutualTask(taskProgressId)
+}
+
+function rejectHelp(taskProgressId: string) {
+  if (confirm('确定拒绝这个互助请求吗？')) {
+    friendStore.rejectMutualTask(taskProgressId)
+  }
+}
+
+function gotoGameForHelp(progress: MutualTaskProgress) {
+  emit('navigateTo', 'game')
+}
+
+function giftMoney(taskProgressId: string) {
+  if (confirm('确定赠送金币完成互助吗？')) {
+    friendStore.giftMoneyToFriend(taskProgressId)
   }
 }
 
 const statusLabels: Record<string, { text: string; color: string }> = {
   available: { text: '可发起', color: 'text-green-400' },
+  requested: { text: '待接受', color: 'text-yellow-400' },
+  accepted: { text: '已接受', color: 'text-cyan-400' },
+  rejected: { text: '已拒绝', color: 'text-gray-500' },
   in_progress: { text: '进行中', color: 'text-blue-400' },
   completed: { text: '待领取', color: 'text-amber-400' },
   claimed: { text: '已领取', color: 'text-gray-500' },
@@ -268,20 +293,59 @@ const statusLabels: Record<string, { text: string; color: string }> = {
             <Gift class="w-4 h-4" />
             领取奖励
           </button>
-          <button
-            v-if="progress.status === 'in_progress'"
-            @click="simulateHelperComplete(progress.id)"
-            class="flex-1 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white text-sm font-medium transition-colors"
-          >
-            模拟好友帮助
-          </button>
-          <button
-            v-if="progress.status === 'in_progress'"
-            class="flex-1 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-gray-300 text-sm font-medium transition-colors flex items-center justify-center gap-1"
-          >
-            <ChevronRight class="w-4 h-4" />
-            查看详情
-          </button>
+
+          <template v-if="progress.status === 'requested' && progress.helperId === friendStore.playerId">
+            <button
+              @click="acceptHelp(progress.id)"
+              class="flex-1 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-white text-sm font-medium transition-colors flex items-center justify-center gap-1"
+            >
+              <Check class="w-4 h-4" />
+              接受
+            </button>
+            <button
+              @click="rejectHelp(progress.id)"
+              class="flex-1 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-white text-sm font-medium transition-colors flex items-center justify-center gap-1"
+            >
+              <X class="w-4 h-4" />
+              拒绝
+            </button>
+          </template>
+
+          <template v-else-if="progress.status === 'in_progress' && progress.helperId === friendStore.playerId">
+            <button
+              v-if="getTask(progress.taskId)?.behaviorType === 'money_gifted'"
+              @click="giftMoney(progress.id)"
+              class="flex-1 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 rounded-lg text-white text-sm font-medium transition-all flex items-center justify-center gap-1"
+            >
+              <Gift class="w-4 h-4" />
+              赠送金币
+            </button>
+            <button
+              v-else
+              @click="gotoGameForHelp(progress)"
+              class="flex-1 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 rounded-lg text-white text-sm font-medium transition-all flex items-center justify-center gap-1"
+            >
+              <Play class="w-4 h-4" />
+              前往帮助
+            </button>
+          </template>
+
+          <template v-else-if="progress.status === 'accepted' && progress.helperId === friendStore.playerId && getTask(progress.taskId)?.behaviorType === 'money_gifted'">
+            <button
+              @click="giftMoney(progress.id)"
+              class="flex-1 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 rounded-lg text-white text-sm font-medium transition-all flex items-center justify-center gap-1"
+            >
+              <Gift class="w-4 h-4" />
+              赠送金币
+            </button>
+          </template>
+
+          <template v-else-if="progress.status === 'in_progress'">
+            <div class="flex-1 py-2 bg-gray-700/50 rounded-lg text-gray-400 text-sm font-medium flex items-center justify-center gap-1">
+              <Clock class="w-4 h-4 animate-pulse" />
+              等待好友完成...
+            </div>
+          </template>
         </div>
       </div>
     </div>

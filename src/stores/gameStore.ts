@@ -7,6 +7,7 @@ import { useSeasonStore } from './seasonStore'
 import { useCharacterStore } from './characterStore'
 import { useAchievementStore } from './achievementStore'
 import { useShopStore } from './shopStore'
+import { useFriendStore } from './friendStore'
 
 const SAVE_KEY = 'b2_morgue_save'
 const SAVE_VERSION = '2.2.0'
@@ -85,6 +86,8 @@ export const useGameStore = defineStore('game', () => {
       seasonStore.updateTaskProgress('reputation_gain', amount)
       const achievementStore = useAchievementStore()
       achievementStore.trackBehavior('reputation_gained', { amount, previous, current: stats.value.reputation })
+      const friendStore = useFriendStore()
+      friendStore.onGameBehavior('reputation_gained', amount)
     }
   }
 
@@ -94,6 +97,8 @@ export const useGameStore = defineStore('game', () => {
     if (amount > 0) {
       const achievementStore = useAchievementStore()
       achievementStore.trackBehavior('sanity_recovered', { amount, previous, current: stats.value.sanity })
+      const friendStore = useFriendStore()
+      friendStore.onGameBehavior('sanity_recovered', amount)
     }
     checkGameOver()
   }

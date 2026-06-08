@@ -14,7 +14,7 @@ const emit = defineEmits<{
 
 const friendStore = useFriendStore()
 
-const filterType = ref<'all' | 'invite' | 'task_request' | 'task_completed' | 'reward_available' | 'milestone_unlocked'>('all')
+const filterType = ref<'all' | 'invite' | 'task_request' | 'task_accepted' | 'task_rejected' | 'help_needed' | 'task_completed' | 'reward_available' | 'milestone_unlocked'>('all')
 
 const filteredNotifications = computed(() => {
   let result = [...friendStore.notifications]
@@ -27,6 +27,9 @@ const filteredNotifications = computed(() => {
 const typeIcons: Record<string, any> = {
   invite: UserPlus,
   task_request: Zap,
+  task_accepted: Check,
+  task_rejected: X,
+  help_needed: Gift,
   task_completed: Check,
   reward_available: Gift,
   milestone_unlocked: Heart
@@ -35,6 +38,9 @@ const typeIcons: Record<string, any> = {
 const typeColors: Record<string, string> = {
   invite: 'bg-cyan-500/20 text-cyan-400',
   task_request: 'bg-blue-500/20 text-blue-400',
+  task_accepted: 'bg-green-500/20 text-green-400',
+  task_rejected: 'bg-red-500/20 text-red-400',
+  help_needed: 'bg-amber-500/20 text-amber-400',
   task_completed: 'bg-green-500/20 text-green-400',
   reward_available: 'bg-amber-500/20 text-amber-400',
   milestone_unlocked: 'bg-pink-500/20 text-pink-400'
@@ -44,6 +50,9 @@ const typeLabels: Record<string, string> = {
   all: '全部',
   invite: '好友邀请',
   task_request: '互助请求',
+  task_accepted: '请求已接受',
+  task_rejected: '请求已拒绝',
+  help_needed: '需要帮助',
   task_completed: '任务完成',
   reward_available: '奖励可领',
   milestone_unlocked: '里程碑'
@@ -79,13 +88,32 @@ function handleClearAll() {
   }
 }
 
+function handleAcceptTaskRequest(notification: FriendNotification) {
+  handleMarkAsRead(notification.id)
+  if (notification.data?.taskProgressId) {
+    friendStore.acceptMutualTask(notification.data.taskProgressId)
+  }
+}
+
+function handleRejectTaskRequest(notification: FriendNotification) {
+  handleMarkAsRead(notification.id)
+  if (notification.data?.taskProgressId) {
+    friendStore.rejectMutualTask(notification.data.taskProgressId)
+  }
+}
+
+function handleGiftMoney(notification: FriendNotification) {
+  handleMarkAsRead(notification.id)
+  if (notification.data?.taskProgressId) {
+    friendStore.giftMoneyToFriend(notification.data.taskProgressId)
+  }
+}
+
 function handleNotificationAction(notification: FriendNotification) {
   handleMarkAsRead(notification.id)
 
   if (notification.type === 'invite' && notification.data?.inviteId) {
     friendStore.acceptFriendInvite(notification.data.inviteId)
-  } else if (notification.type === 'task_request' && notification.data?.taskProgressId) {
-    // 可以跳转到任务详情
   } else if (notification.type === 'reward_available' && notification.data?.taskProgressId) {
     friendStore.claimMutualTaskReward(notification.data.taskProgressId)
   }
@@ -202,11 +230,39 @@ function handleNotificationAction(notification: FriendNotification) {
                   >
                     接受
                   </button>
+
+                  <template v-if="notification.type === 'task_request' && notification.data?.taskProgressId">
+                    <button
+                      @click.stop="handleAcceptTaskRequest(notification)"
+                      class="px-3 py-1 bg-green-600 hover:bg-green-500 rounded text-xs text-white font-medium transition-colors flex items-center gap-1"
+                    >
+                      <Check class="w-3 h-3" />
+                      接受
+                    </button>
+                    <button
+                      @click.stop="handleRejectTaskRequest(notification)"
+                      class="px-3 py-1 bg-red-600 hover:bg-red-500 rounded text-xs text-white font-medium transition-colors flex items-center gap-1"
+                    >
+                      <X class="w-3 h-3" />
+                      拒绝
+                    </button>
+                  </template>
+
+                  <button
+                    v-if="notification.type === 'help_needed' && notification.data?.taskProgressId"
+                    @click.stop="handleGiftMoney(notification)"
+                    class="px-3 py-1 bg-amber-600 hover:bg-amber-500 rounded text-xs text-white font-medium transition-colors flex items-center gap-1"
+                  >
+                    <Gift class="w-3 h-3" />
+                    赠送
+                  </button>
+
                   <button
                     v-if="notification.type === 'reward_available' && notification.data?.taskProgressId"
                     @click.stop="handleNotificationAction(notification)"
-                    class="px-3 py-1 bg-amber-600 hover:bg-amber-500 rounded text-xs text-white font-medium transition-colors"
+                    class="px-3 py-1 bg-amber-600 hover:bg-amber-500 rounded text-xs text-white font-medium transition-colors flex items-center gap-1"
                   >
+                    <Gift class="w-3 h-3" />
                     领取
                   </button>
                 </div>

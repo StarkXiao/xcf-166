@@ -9,7 +9,8 @@ import type {
   FriendStatistics,
   FriendSaveData,
   RecommendedPlayer,
-  MutualTask
+  MutualTask,
+  MutualTaskBehaviorType
 } from '@/types/friend'
 import {
   FRIEND_STORAGE_KEY,
@@ -18,7 +19,7 @@ import {
   MAX_PENDING_INVITES,
   MAX_ACTIVE_TASKS_PER_FRIEND
 } from '@/types/friend'
-import { mutualTasks, mockPlayers, getFriendshipLevelFromExp, getExpForFriendshipLevel, getNextMilestone, getMilestoneByLevel } from '@/game/data/friendData'
+import { mutualTasks, mockPlayers, getFriendshipLevelFromExp, getExpForFriendshipLevel, getNextMilestone, getMilestoneByLevel, getMutualTaskById } from '@/game/data/friendData'
 import { useGameStore } from './gameStore'
 import { useSeasonStore } from './seasonStore'
 import { useCharacterStore } from './characterStore'
@@ -88,10 +89,18 @@ export const useFriendStore = defineStore('friend', () => {
 
   const pendingInviteCount = computed(() => pendingInvites.value.length)
 
+  const pendingHelpRequests = computed(() =>
+    mutualTaskProgresses.value.filter(t =>
+      t.status === 'requested' && t.helperId === playerId.value
+    )
+  )
+
+  const pendingHelpRequestCount = computed(() => pendingHelpRequests.value.length)
+
   const activeMutualTasks = computed(() =>
     mutualTaskProgresses.value.filter(t =>
       (t.initiatorId === playerId.value || t.helperId === playerId.value) &&
-      (t.status === 'in_progress' || t.status === 'completed')
+      (t.status === 'in_progress' || t.status === 'completed' || t.status === 'requested')
     )
   )
 
@@ -116,7 +125,7 @@ export const useFriendStore = defineStore('friend', () => {
   const unreadNotificationCount = computed(() => unreadNotifications.value.length)
 
   const totalUnreadCount = computed(() =>
-    pendingInviteCount.value + unclaimedRewardCount.value + unreadNotificationCount.value
+    pendingInviteCount.value + unclaimedRewardCount.value + unreadNotificationCount.value + pendingHelpRequestCount.value
   )
 
   const statistics = computed<FriendStatistics>(() => {
@@ -209,17 +218,30 @@ export const useFriendStore = defineStore('friend', () => {
       const mockTaskProgress: MutualTaskProgress = {
         id: generateId('task'),
         taskId: task.id,
-        initiatorId: playerId.value,
-        initiatorName: playerName.value,
-        helperId: friend.friendId,
-        helperName: friend.friendName,
-        status: 'in_progress',
+        initiatorId: friend.friendId,
+        initiatorName: friend.friendName,
+        helperId: playerId.value,
+        helperName: playerName.value,
+        status: 'requested',
         progress: 0,
         helperProgress: 0,
-        startedAt: now - 3600000,
-        expiresAt: now + task.duration * 1000
+        startedAt: now - 1800000,
+        expiresAt: now + task.duration * 1000,
+        initiatorBonusApplied: false,
+        helperBonusApplied: false,
+        requestMessage: '嗨，帮我处理一个订单吧，有奖励哦！'
       }
       mutualTaskProgresses.value = [mockTaskProgress]
+
+      addNotification({
+        type: 'task_request',
+        title: '🤝 互助请求',
+        message: `${friend.friendName} 邀请你协助「${task.title}」`,
+        fromPlayerId: friend.friendId,
+        fromPlayerName: friend.friendName,
+        fromPlayerAvatar: friend.friendAvatar,
+        data: { taskProgressId: mockTaskProgress.id, taskId: task.id }
+      })
     }
   }
 
@@ -469,7 +491,7 @@ export const useFriendStore = defineStore('friend', () => {
     return friends.value.find(f => f.friendId === friendId)
   }
 
-  function startMutualTask(taskId: string, helperId: string): boolean {
+  function startMutualTask(taskId: string, helperId: string, message?: string): boolean {
     const task = availableMutualTasks.value.find(t => t.id === taskId)
     if (!task) return false
 
@@ -485,13 +507,13 @@ export const useFriendStore = defineStore('friend', () => {
     }
 
     const activeTasksWithFriend = mutualTaskProgresses.value.filter(
-      t => t.status === 'in_progress' &&
+      t => (t.status === 'in_progress' || t.status === 'requested') &&
         ((t.initiatorId === playerId.value && t.helperId === helperId) ||
          (t.initiatorId === helperId && t.helperId === playerId.value))
     ).length
 
     if (activeTasksWithFriend >= MAX_ACTIVE_TASKS_PER_FRIEND) {
-      alert(`与该好友的进行中任务已达上限 (${MAX_ACTIVE_TASKS_PER_FRIEND})`)
+      alert(`与该好友的进行中/待接受任务已达上限 (${MAX_ACTIVE_TASKS_PER_FRIEND})`)
       return false
     }
 
@@ -503,11 +525,14 @@ export const useFriendStore = defineStore('friend', () => {
       initiatorName: playerName.value,
       helperId: friend.friendId,
       helperName: friend.friendName,
-      status: 'in_progress',
+      status: 'requested',
       progress: 0,
       helperProgress: 0,
       startedAt: now,
-      expiresAt: now + task.duration * 1000
+      expiresAt: now + task.duration * 1000,
+      initiatorBonusApplied: false,
+      helperBonusApplied: false,
+      requestMessage: message
     }
 
     mutualTaskProgresses.value.push(taskProgress)
@@ -517,12 +542,12 @@ export const useFriendStore = defineStore('friend', () => {
     addActivity({
       friendId: helperId,
       activityType: 'help_sent',
-      description: `向 ${friend.friendName} 发起了「${task.title}」互助任务`
+      description: `向 ${friend.friendName} 发起了「${task.title}」互助请求`
     })
 
     addNotification({
       type: 'task_request',
-      title: '互助任务请求',
+      title: '🤝 互助请求',
       message: `${playerName.value} 邀请你协助「${task.title}」`,
       fromPlayerId: friend.friendId,
       fromPlayerName: friend.friendName,
@@ -534,21 +559,106 @@ export const useFriendStore = defineStore('friend', () => {
     return true
   }
 
-  function completeTaskHelper(taskProgressId: string): boolean {
+  function acceptMutualTask(taskProgressId: string): boolean {
+    const taskProgress = mutualTaskProgresses.value.find(t => t.id === taskProgressId)
+    if (!taskProgress || taskProgress.status !== 'requested' || taskProgress.helperId !== playerId.value) {
+      return false
+    }
+
+    const task = getMutualTaskById(taskProgress.taskId)
+    if (!task) return false
+
+    const now = Date.now()
+    taskProgress.status = 'accepted'
+    taskProgress.respondedAt = now
+
+    const friend = friends.value.find(f => f.friendId === taskProgress.initiatorId)
+    if (friend) {
+      friend.lastInteractAt = now
+      if (task.behaviorType !== 'money_gifted') {
+        taskProgress.status = 'in_progress'
+      }
+    }
+
+    addActivity({
+      friendId: taskProgress.initiatorId,
+      activityType: 'help_received',
+      description: `接受了 ${taskProgress.initiatorName} 的「${task.title}」互助请求`
+    })
+
+    addNotification({
+      type: 'task_accepted',
+      title: '✅ 互助请求已接受',
+      message: `${playerName.value} 接受了你的「${task.title}」互助请求`,
+      fromPlayerId: taskProgress.initiatorId,
+      fromPlayerName: taskProgress.initiatorName,
+      fromPlayerAvatar: '🏛️',
+      data: { taskProgressId: taskProgress.id, taskId: task.id }
+    })
+
+    if (task.behaviorType === 'money_gifted') {
+      addNotification({
+        type: 'help_needed',
+        title: '💰 等待赠礼',
+        message: `请向 ${taskProgress.initiatorName} 赠送 ${task.target} 金币完成互助`,
+        fromPlayerId: taskProgress.initiatorId,
+        fromPlayerName: taskProgress.initiatorName,
+        fromPlayerAvatar: '🏛️',
+        data: { taskProgressId: taskProgress.id, taskId: task.id, amount: task.target }
+      })
+    }
+
+    saveAllData()
+    return true
+  }
+
+  function rejectMutualTask(taskProgressId: string, reason?: string): boolean {
+    const taskProgress = mutualTaskProgresses.value.find(t => t.id === taskProgressId)
+    if (!taskProgress || taskProgress.status !== 'requested' || taskProgress.helperId !== playerId.value) {
+      return false
+    }
+
+    const task = getMutualTaskById(taskProgress.taskId)
+    if (!task) return false
+
+    const now = Date.now()
+    taskProgress.status = 'rejected'
+    taskProgress.rejectedAt = now
+    taskProgress.respondedAt = now
+
+    addActivity({
+      friendId: taskProgress.initiatorId,
+      activityType: 'help_received',
+      description: `拒绝了 ${taskProgress.initiatorName} 的「${task.title}」互助请求`
+    })
+
+    addNotification({
+      type: 'task_rejected',
+      title: '❌ 互助请求被拒绝',
+      message: `${playerName.value} 拒绝了你的「${task.title}」互助请求${reason ? `，原因：${reason}` : ''}`,
+      fromPlayerId: taskProgress.initiatorId,
+      fromPlayerName: taskProgress.initiatorName,
+      fromPlayerAvatar: '🏛️',
+      data: { taskProgressId: taskProgress.id, taskId: task.id }
+    })
+
+    saveAllData()
+    return true
+  }
+
+  function completeMutualTask(taskProgressId: string): boolean {
     const taskProgress = mutualTaskProgresses.value.find(t => t.id === taskProgressId)
     if (!taskProgress || taskProgress.status !== 'in_progress') {
       return false
     }
 
-    const task = availableMutualTasks.value.find(t => t.id === taskProgress.taskId)
+    const task = getMutualTaskById(taskProgress.taskId)
     if (!task) return false
 
     const friend = friends.value.find(f =>
       f.friendId === (taskProgress.initiatorId === playerId.value ? taskProgress.helperId : taskProgress.initiatorId)
     )
 
-    taskProgress.helperProgress = task.target
-    taskProgress.progress = task.target
     taskProgress.status = 'completed'
     taskProgress.completedAt = Date.now()
 
@@ -590,6 +700,67 @@ export const useFriendStore = defineStore('friend', () => {
     })
 
     saveAllData()
+    return true
+  }
+
+  function onGameBehavior(behaviorType: MutualTaskBehaviorType, value: number = 1, metadata: Record<string, any> = {}): void {
+    const inProgressTasks = mutualTaskProgresses.value.filter(t =>
+      t.status === 'in_progress'
+    )
+
+    inProgressTasks.forEach(taskProgress => {
+      const task = getMutualTaskById(taskProgress.taskId)
+      if (!task || task.behaviorType !== behaviorType) return
+
+      const isInitiator = taskProgress.initiatorId === playerId.value
+      const isHelper = taskProgress.helperId === playerId.value
+
+      if (isHelper) {
+        taskProgress.helperProgress = Math.min(task.target, taskProgress.helperProgress + value)
+        if (taskProgress.helperProgress >= task.target) {
+          taskProgress.progress = task.target
+          completeMutualTask(taskProgress.id)
+        }
+      }
+
+      if (isInitiator && !taskProgress.initiatorBonusApplied) {
+        taskProgress.initiatorBonusApplied = true
+        if (task.buffEffect) {
+          addActivity({
+            friendId: taskProgress.helperId,
+            activityType: 'help_received',
+            description: `「${task.title}」互助加成已生效：${task.buffEffect}`
+          })
+        }
+      }
+
+      saveAllData()
+    })
+  }
+
+  function giftMoneyToFriend(taskProgressId: string): boolean {
+    const taskProgress = mutualTaskProgresses.value.find(t => t.id === taskProgressId)
+    if (!taskProgress || (taskProgress.status !== 'accepted' && taskProgress.status !== 'in_progress')) {
+      return false
+    }
+
+    const task = getMutualTaskById(taskProgress.taskId)
+    if (!task || task.behaviorType !== 'money_gifted') return false
+
+    const gameStore = useGameStore()
+    const amount = task.target
+
+    if (gameStore.stats.money < amount) {
+      alert(`金币不足，需要 ${amount} 金币`)
+      return false
+    }
+
+    gameStore.addMoney(-amount)
+
+    taskProgress.helperProgress = amount
+    taskProgress.progress = amount
+    completeMutualTask(taskProgress.id)
+
     return true
   }
 
@@ -791,6 +962,8 @@ export const useFriendStore = defineStore('friend', () => {
     pendingInvites,
     sentInvites,
     pendingInviteCount,
+    pendingHelpRequests,
+    pendingHelpRequestCount,
     activeMutualTasks,
     activeTaskCount,
     unclaimedRewardCount,
@@ -810,8 +983,12 @@ export const useFriendStore = defineStore('friend', () => {
     unblockFriend,
     getFriendById,
     startMutualTask,
-    completeTaskHelper,
+    acceptMutualTask,
+    rejectMutualTask,
+    completeMutualTask,
     claimMutualTaskReward,
+    onGameBehavior,
+    giftMoneyToFriend,
     addFriendshipExp,
     getFriendshipProgress,
     addNotification,

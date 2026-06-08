@@ -1,8 +1,10 @@
 export type FriendInviteStatus = 'pending' | 'accepted' | 'rejected' | 'cancelled' | 'expired'
 
-export type MutualTaskStatus = 'available' | 'in_progress' | 'completed' | 'claimed' | 'expired'
+export type MutualTaskStatus = 'available' | 'requested' | 'accepted' | 'in_progress' | 'completed' | 'claimed' | 'expired' | 'rejected'
 
-export type FriendNotificationType = 'invite' | 'task_request' | 'task_completed' | 'reward_available' | 'milestone_unlocked'
+export type FriendNotificationType = 'invite' | 'task_request' | 'task_accepted' | 'task_rejected' | 'task_completed' | 'reward_available' | 'milestone_unlocked' | 'help_needed'
+
+export type MutualTaskBehaviorType = 'order_completed' | 'relic_purified' | 'sanity_recovered' | 'reputation_gained' | 'money_gifted'
 
 export type FriendActivityType = 'help_sent' | 'help_received' | 'task_completed' | 'milestone_unlocked' | 'reward_claimed' | 'friend_added' | 'friend_removed'
 
@@ -19,6 +21,7 @@ export interface MutualTaskReward {
 export interface MutualTask {
   id: string
   type: string
+  behaviorType: MutualTaskBehaviorType
   title: string
   description: string
   target: number
@@ -28,6 +31,7 @@ export interface MutualTask {
   rewards: MutualTaskReward[]
   requiresFriend: boolean
   minFriendshipLevel: number
+  buffEffect?: string
 }
 
 export interface FriendshipMilestone {
@@ -88,7 +92,12 @@ export interface MutualTaskProgress {
   expiresAt: number
   completedAt?: number
   claimedAt?: number
+  respondedAt?: number
+  rejectedAt?: number
   helperProgress: number
+  initiatorBonusApplied: boolean
+  helperBonusApplied: boolean
+  requestMessage?: string
 }
 
 export interface FriendNotification {

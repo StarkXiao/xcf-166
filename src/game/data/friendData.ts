@@ -4,6 +4,7 @@ export const mutualTasks: MutualTask[] = [
   {
     id: 'mutual_001',
     type: 'order_help',
+    behaviorType: 'order_completed',
     title: '订单援助',
     description: '帮助好友完成一个订单处理，双方均可获得奖励',
     target: 1,
@@ -31,11 +32,13 @@ export const mutualTasks: MutualTask[] = [
       }
     ],
     requiresFriend: true,
-    minFriendshipLevel: 1
+    minFriendshipLevel: 1,
+    buffEffect: '奖励加成20%'
   },
   {
     id: 'mutual_002',
     type: 'relic_purify',
+    behaviorType: 'relic_purified',
     title: '遗物净化',
     description: '协助好友净化一件遗物，降低处理难度',
     target: 1,
@@ -63,11 +66,13 @@ export const mutualTasks: MutualTask[] = [
       }
     ],
     requiresFriend: true,
-    minFriendshipLevel: 2
+    minFriendshipLevel: 2,
+    buffEffect: '难度降低30%'
   },
   {
     id: 'mutual_003',
     type: 'sanity_recover',
+    behaviorType: 'sanity_recovered',
     title: '心灵慰藉',
     description: '倾听好友的倾诉，帮助其恢复理智值',
     target: 30,
@@ -95,11 +100,13 @@ export const mutualTasks: MutualTask[] = [
       }
     ],
     requiresFriend: true,
-    minFriendshipLevel: 1
+    minFriendshipLevel: 1,
+    buffEffect: '理智恢复速度+50%'
   },
   {
     id: 'mutual_004',
     type: 'reputation_boost',
+    behaviorType: 'reputation_gained',
     title: '声望提携',
     description: '在同行中为美言，提升双方声望',
     target: 50,
@@ -127,11 +134,13 @@ export const mutualTasks: MutualTask[] = [
       }
     ],
     requiresFriend: true,
-    minFriendshipLevel: 3
+    minFriendshipLevel: 3,
+    buffEffect: '声望获取+25%'
   },
   {
     id: 'mutual_005',
     type: 'money_gift',
+    behaviorType: 'money_gifted',
     title: '资金拆借',
     description: '在好友困难时伸出援手，赠送一笔启动资金',
     target: 1000,

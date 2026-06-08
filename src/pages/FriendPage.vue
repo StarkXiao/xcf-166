@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useFriendStore } from '@/stores/friendStore'
 import { friendshipMilestones } from '@/game/data/friendData'
 import FriendList from '@/components/friend/FriendList.vue'
@@ -9,7 +9,14 @@ import MutualTaskPanel from '@/components/friend/MutualTaskPanel.vue'
 import { Users, UserPlus, ListTodo, Star, Heart, TrendingUp, Award, Zap, Gift } from 'lucide-vue-next'
 
 const route = useRoute()
+const router = useRouter()
 const friendStore = useFriendStore()
+
+function handleNavigateTo(target: string) {
+  if (target === 'game') {
+    router.push('/')
+  }
+}
 
 const activeTab = ref<'list' | 'invites' | 'tasks' | 'rewards'>('list')
 const selectedFriendId = ref<string | null>(null)
@@ -164,7 +171,7 @@ onMounted(() => {
           </div>
 
           <div v-else-if="activeTab === 'tasks'" key="tasks">
-            <MutualTaskPanel :friend-id="selectedFriendId || undefined" />
+            <MutualTaskPanel :friend-id="selectedFriendId || undefined" @navigate-to="handleNavigateTo" />
           </div>
 
           <div v-else-if="activeTab === 'rewards'" key="rewards">

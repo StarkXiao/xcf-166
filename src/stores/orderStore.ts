@@ -6,6 +6,7 @@ import { useGameStore } from './gameStore'
 import { useSeasonStore } from './seasonStore'
 import { useCharacterStore } from './characterStore'
 import { useAchievementStore } from './achievementStore'
+import { useFriendStore } from './friendStore'
 
 export const useOrderStore = defineStore('order', () => {
   const gameStore = useGameStore()
@@ -84,6 +85,9 @@ export const useOrderStore = defineStore('order', () => {
     gameStore.addMoney(adjustedReward)
     gameStore.addReputation(adjustedReputation)
     gameStore.completeOrder()
+
+    const friendStore = useFriendStore()
+    friendStore.onGameBehavior('order_completed', 1, { orderId, relicType: orderData.relic.type })
 
     acceptedOrders.value.splice(idx, 1)
 
