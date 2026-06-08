@@ -39,6 +39,7 @@ const isHighlightStep = computed(() => {
 const totalSteps = computed(() => getTotalStepCount())
 
 function handleNext() {
+  if (!tutorialStore.canProceedToNext) return
   tutorialStore.nextStep()
 }
 
@@ -155,6 +156,7 @@ defineExpose({
       :total-steps="currentPhaseStepCount"
       :current-step-index="tutorialStore.state.currentStepIndex"
       :can-skip="tutorialStore.canSkipCurrentPhase"
+      :can-proceed="tutorialStore.canProceedToNext"
       :is-mandatory="tutorialStore.isCurrentPhaseMandatory"
       :phase-progress="tutorialStore.phaseProgressPercent"
       :total-progress="tutorialStore.totalProgress"

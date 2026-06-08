@@ -9,6 +9,7 @@ const props = defineProps<{
   totalSteps: number
   currentStepIndex: number
   canSkip: boolean
+  canProceed: boolean
   isMandatory: boolean
   phaseProgress: number
   totalProgress: number
@@ -116,8 +117,12 @@ const isModal = computed(() => {
 const formattedDescription = computed(() => {
   if (!props.step?.description) return ''
   return props.step.description
-    .replace(/\*\*(.*?)\*\*/g, '<strong class="text-amber-400">$1</strong>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong class="text-amber-300">$1</strong>')
     .replace(/\n/g, '<br />')
+})
+
+const needsAction = computed(() => {
+  return props.step?.validation !== undefined && !props.canProceed
 })
 
 function updateTargetPosition() {
@@ -283,9 +288,17 @@ function handleClose() {
 
                 <button
                   @click="handleNext"
-                  class="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-gray-900 font-semibold rounded-xl transition-all shadow-lg shadow-amber-500/30 flex items-center gap-2"
+                  :disabled="!canProceed"
+                  class="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-400 text-gray-900 font-semibold rounded-xl transition-all shadow-lg shadow-amber-500/30 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:from-gray-600 disabled:to-gray-500 disabled:shadow-none"
+                  :class="{ 'hover:from-amber-400 hover:to-amber-300': canProceed }"
                 >
-                  {{ currentStepIndex + 1 >= totalSteps ? '完成阶段' : '下一步' }}
+                  <span v-if="needsAction" class="flex items-center gap-1.5">
+                    <span class="animate-pulse">●</span>
+                    等待操作
+                  </span>
+                  <span v-else>
+                    {{ currentStepIndex + 1 >= totalSteps ? '完成阶段' : '下一步' }}
+                  </span>
                   <ChevronRight class="w-4 h-4" />
                 </button>
               </div>

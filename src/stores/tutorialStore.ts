@@ -99,6 +99,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
     currentPhase: 'welcome',
     currentStep: null,
     currentStepIndex: 0,
+    currentStepValidated: false,
     showOverlay: false,
     showSkipConfirm: false,
     phaseStartTime: Date.now()
@@ -152,6 +153,15 @@ export const useTutorialStore = defineStore('tutorial', () => {
     const step = state.value.currentStep
     if (!step) return false
     return step.canSkip
+  })
+
+  const canProceedToNext = computed(() => {
+    const step = state.value.currentStep
+    if (!step) return false
+    if (step.validation && !state.value.currentStepValidated) {
+      return false
+    }
+    return true
   })
 
   const isCurrentPhaseMandatory = computed(() => {
@@ -249,6 +259,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
       currentPhase: 'welcome',
       currentStep: null,
       currentStepIndex: 0,
+      currentStepValidated: false,
       showOverlay: false,
       showSkipConfirm: false,
       phaseStartTime: Date.now()
@@ -327,15 +338,22 @@ export const useTutorialStore = defineStore('tutorial', () => {
       const step = steps[stepIndex]
       state.value.currentStep = step
       state.value.showOverlay = step.isBlocking
+      state.value.currentStepValidated = !step.validation
     } else {
       completePhase()
     }
   }
 
-  function nextStep() {
-    if (!state.value.currentStep) return
+  function nextStep(): boolean {
+    if (!state.value.currentStep) return false
 
     const currentStep = state.value.currentStep
+
+    if (currentStep.validation && !state.value.currentStepValidated) {
+      trackTutorialEvent('next_blocked_by_validation', { stepId: currentStep.id })
+      return false
+    }
+
     const phaseProgressItem = phaseProgress.value[state.value.currentPhase]
 
     if (phaseProgressItem && !phaseProgressItem.completedSteps.includes(currentStep.id)) {
@@ -356,6 +374,8 @@ export const useTutorialStore = defineStore('tutorial', () => {
       state.value.currentStepIndex++
       loadCurrentStep()
     }, delay)
+
+    return true
   }
 
   function skipCurrentStep() {
@@ -550,6 +570,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
         stepId: currentStep.id,
         eventType
       })
+      state.value.currentStepValidated = true
       nextStep()
     }
   }
@@ -689,6 +710,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
     phaseProgressPercent,
     canSkipCurrentPhase,
     canSkipCurrentStep,
+    canProceedToNext,
     isCurrentPhaseMandatory,
     completedPhases,
     analyticsSummary,

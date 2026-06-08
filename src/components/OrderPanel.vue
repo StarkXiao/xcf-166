@@ -115,7 +115,7 @@ function handleSelect(orderId: string) {
         </div>
       </div>
 
-      <div>
+      <div class="accepted-orders-tab">
         <h3 class="text-sm font-semibold text-blue-400 mb-2 flex items-center gap-2">
           <span class="w-2 h-2 rounded-full bg-blue-400" :class="{ 'animate-pulse': gameStore.timePhase === 'night' }"></span>
           待处理 ({{ acceptedOrders.length }})

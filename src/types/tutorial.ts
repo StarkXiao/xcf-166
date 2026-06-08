@@ -111,6 +111,7 @@ export interface TutorialState {
   currentPhase: TutorialPhase
   currentStep: TutorialStep | null
   currentStepIndex: number
+  currentStepValidated: boolean
   showOverlay: boolean
   showSkipConfirm: boolean
   phaseStartTime: number
