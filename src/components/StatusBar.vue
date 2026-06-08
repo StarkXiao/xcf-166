@@ -120,7 +120,7 @@ const phaseButtonText = () => {
           </div>
           <span class="text-purple-400 text-sm">{{ gameStore.stats.reputation }}</span>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="sanity-bar flex items-center gap-2">
           <span class="text-lg">🧠</span>
           <div class="w-24 h-2 bg-gray-700 rounded-full overflow-hidden">
             <div

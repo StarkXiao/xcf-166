@@ -620,6 +620,7 @@ export const useTutorialStore = defineStore('tutorial', () => {
     DEFAULT_TUTORIAL_PHASES.forEach(phase => {
       const progress = phaseProgress.value[phase]
       const steps = getTutorialStepsByPhase(phase)
+      const config = getPhaseConfig(phase)
 
       steps.forEach(step => {
         if (progress &&
@@ -641,16 +642,12 @@ export const useTutorialStore = defineStore('tutorial', () => {
       }
     })
 
-    if (sessionStartTime.value) {
-      analytics.value.totalTimeSpent = Date.now() - sessionStartTime.value
-    }
+    trackTutorialEvent('tutorial_skipped', {
+      skippedPhases: analytics.value.skippedPhases.length,
+      skippedSteps: analytics.value.skippedSteps.length
+    })
 
-    isCompleted.value = true
-    state.value.isActive = false
-    state.value.showOverlay = false
-    state.value.currentStep = null
-
-    saveAllData()
+    completeTutorial()
   }
 
   function getCurrentPhaseSteps(): TutorialStep[] {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useAchievementStore } from '@/stores/achievementStore'
 import { useSeasonStore } from '@/stores/seasonStore'
 import { useCharacterStore } from '@/stores/characterStore'
@@ -20,7 +20,7 @@ const router = useRouter()
 const route = useRoute()
 
 const showNotificationCenter = ref(false)
-const showNav = ref(true)
+const showNav = computed(() => route.name === 'game')
 const tutorialGuideRef = ref<InstanceType<typeof TutorialGuide> | null>(null)
 
 onMounted(() => {
@@ -42,39 +42,16 @@ function restartTutorial() {
 }
 
 watch(
-  () => gameStore.stats.totalOrdersCompleted,
-  (newCount, oldCount) => {
-    if (newCount > oldCount && tutorialGuideRef.value) {
-      tutorialGuideRef.value.handleBehaviorEvent('order_completed', { count: newCount })
-    }
-  }
-)
-
-watch(
-  () => gameStore.stats.totalRelicsProcessed,
-  (newCount, oldCount) => {
-    if (newCount > oldCount && tutorialGuideRef.value) {
-      tutorialGuideRef.value.handleBehaviorEvent('relic_purified', { count: newCount })
-    }
-  }
-)
-
-watch(
   () => achievementStore.behaviorEvents.length,
-  () => {
+  (newLen, oldLen) => {
     if (!tutorialGuideRef.value || !tutorialStore.state.isActive) return
+    if (newLen <= oldLen) return
 
-    const lastEvent = achievementStore.behaviorEvents[achievementStore.behaviorEvents.length - 1]
+    const lastEvent = achievementStore.behaviorEvents[newLen - 1]
     if (lastEvent) {
-      const eventMap: Record<string, string> = {
-        'order_accepted': 'order_accepted',
-        'order_completed': 'order_completed',
-        'relic_purified': 'relic_purified'
-      }
-
-      const mappedEvent = eventMap[lastEvent.eventType]
-      if (mappedEvent) {
-        tutorialGuideRef.value.handleBehaviorEvent(mappedEvent, lastEvent.metadata)
+      const validEvents = ['order_accepted', 'order_completed', 'relic_purified']
+      if (validEvents.includes(lastEvent.eventType)) {
+        tutorialGuideRef.value.handleBehaviorEvent(lastEvent.eventType, lastEvent.metadata)
       }
     }
   }
@@ -101,7 +78,7 @@ function goToShop() {
     >
       <button
         @click="goToShop"
-        class="relative p-3 bg-gray-900/90 backdrop-blur-sm rounded-xl border border-gray-700 hover:bg-gray-800 transition-colors group"
+        class="shop-entry-btn relative p-3 bg-gray-900/90 backdrop-blur-sm rounded-xl border border-gray-700 hover:bg-gray-800 transition-colors group"
         :class="{ 'ring-2 ring-amber-500': route.name === 'shop' }"
         title="道具商城"
       >
@@ -110,7 +87,7 @@ function goToShop() {
 
       <button
         @click="goToAchievements"
-        class="relative p-3 bg-gray-900/90 backdrop-blur-sm rounded-xl border border-gray-700 hover:bg-gray-800 transition-colors group"
+        class="achievement-entry-btn relative p-3 bg-gray-900/90 backdrop-blur-sm rounded-xl border border-gray-700 hover:bg-gray-800 transition-colors group"
         :class="{ 'ring-2 ring-amber-500': route.name === 'achievements' }"
         title="成就中心"
       >

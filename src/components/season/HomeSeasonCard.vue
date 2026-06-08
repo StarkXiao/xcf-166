@@ -220,7 +220,7 @@ onUnmounted(() => {
 
     <button
       @click="toggleExpand"
-      class="season-toggle-btn relative w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-600 to-red-600 shadow-2xl shadow-purple-500/40 flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95"
+      class="season-entry-btn season-toggle-btn relative w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-600 to-red-600 shadow-2xl shadow-purple-500/40 flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95"
     >
       <div
         v-if="seasonStore.unclaimedCount > 0"

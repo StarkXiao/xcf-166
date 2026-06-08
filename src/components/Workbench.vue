@@ -4,6 +4,7 @@ import { useOrderStore } from '@/stores/orderStore'
 import { useGameStore } from '@/stores/gameStore'
 import { useEventStore } from '@/stores/eventStore'
 import { useCharacterStore } from '@/stores/characterStore'
+import { useAchievementStore } from '@/stores/achievementStore'
 import { audioManager } from '@/game/audio'
 import type { Relic, ProcessingStep } from '@/game/types'
 
@@ -11,6 +12,7 @@ const orderStore = useOrderStore()
 const gameStore = useGameStore()
 const eventStore = useEventStore()
 const characterStore = useCharacterStore()
+const achievementStore = useAchievementStore()
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const animationId = ref<number | null>(null)
@@ -606,6 +608,13 @@ function completeStep(orderId: string, stepId: string) {
   const anomalyChance = characterStore.calculateAnomalyResistance(0.2)
   if (Math.random() < anomalyChance) {
     eventStore.triggerRandomAnomaly()
+  }
+
+  if (allStepsCompleted.value && currentOrder.value) {
+    achievementStore.trackBehavior('relic_purified', {
+      relicType: currentOrder.value.relic.type,
+      orderId: currentOrder.value.order.id
+    })
   }
 }
 
