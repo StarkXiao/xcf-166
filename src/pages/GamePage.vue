@@ -8,11 +8,21 @@ import { useCharacterStore } from '@/stores/characterStore'
 import { useTaskStore } from '@/stores/taskStore'
 import { useOfflineStore } from '@/stores/offlineStore'
 import { audioManager } from '@/game/audio'
+import {
+  createAutoSaveController,
+  getActiveSlotIndex,
+  setActiveSlotIndex,
+  isSlotOccupied,
+  checkCloudSyncPrompt,
+  loadManifest,
+  getAllSlotInfos
+} from '@/game/saveManager'
 import StatusBar from '@/components/StatusBar.vue'
 import OrderPanel from '@/components/OrderPanel.vue'
 import Workbench from '@/components/Workbench.vue'
 import EventModal from '@/components/EventModal.vue'
 import OfflineEarningsDialog from '@/components/OfflineEarningsDialog.vue'
+import SaveSlotDialog from '@/components/SaveSlotDialog.vue'
 import HomeSeasonCard from '@/components/season/HomeSeasonCard.vue'
 import HomeTaskCard from '@/components/task/HomeTaskCard.vue'
 import TaskReminder from '@/components/task/TaskReminder.vue'
@@ -27,10 +37,24 @@ const offlineStore = useOfflineStore()
 
 const showStartScreen = ref(true)
 const hasExistingSave = ref(false)
+const showSaveSlotDialog = ref(false)
+const autoSaveToast = ref(false)
+const autoSaveTime = ref('')
+const cloudPromptMessage = ref('')
 
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+const autoSaveController = createAutoSaveController()
 
-function handleNewGame() {
+function startAutoSave() {
+  const activeSlot = getActiveSlotIndex()
+  autoSaveController.start(() => gameStore.buildSaveData(), activeSlot)
+}
+
+function stopAutoSave() {
+  autoSaveController.stop()
+}
+
+function handleNewGame(slotIndex?: number) {
   audioManager.playClick()
   audioManager.init().then(() => {
     audioManager.startAmbient()
@@ -39,20 +63,26 @@ function handleNewGame() {
   eventStore.clearAllEvents()
   characterStore.resetCharacters()
   offlineStore.resetOffline()
+
+  if (slotIndex !== undefined) {
+    setActiveSlotIndex(slotIndex)
+  }
+
   gameStore.startGame()
   orderStore.generateNewOrders(1)
   eventStore.queueIntroEvents()
   characterStore.checkUnlockConditions()
   showStartScreen.value = false
   startHeartbeat()
+  startAutoSave()
 }
 
-function handleContinue() {
+function handleContinue(slotIndex?: number) {
   audioManager.playClick()
   audioManager.init().then(() => {
     audioManager.startAmbient()
   })
-  const saveData = gameStore.loadGame()
+  const saveData = gameStore.loadGame(slotIndex)
   if (saveData) {
     orderStore.clearAllOrders()
     eventStore.clearAllEvents()
@@ -70,6 +100,7 @@ function handleContinue() {
     characterStore.checkUnlockConditions()
     showStartScreen.value = false
     startHeartbeat()
+    startAutoSave()
 
     offlineStore.loadFromStorage()
     const earnings = offlineStore.checkOfflineEarnings()
@@ -78,11 +109,19 @@ function handleContinue() {
         offlineStore.showClaimDialog = true
       }, 800)
     }
+
+    const activeSlot = getActiveSlotIndex()
+    const prompt = checkCloudSyncPrompt(activeSlot)
+    if (prompt.shouldPrompt) {
+      cloudPromptMessage.value = prompt.message
+      setTimeout(() => { cloudPromptMessage.value = '' }, 5000)
+    }
   }
 }
 
 function handleGameOverRestart() {
   audioManager.playClick()
+  stopAutoSave()
   gameStore.deleteSave()
   orderStore.clearAllOrders()
   eventStore.clearAllEvents()
@@ -91,7 +130,34 @@ function handleGameOverRestart() {
   eventStore.queueIntroEvents()
 }
 
+function handleSlotSelect(slotIndex: number) {
+  if (isSlotOccupied(slotIndex)) {
+    handleContinue(slotIndex)
+  } else {
+    handleNewGame(slotIndex)
+  }
+}
+
+function handleSlotDelete(_slotIndex: number) {
+  hasExistingSave.value = gameStore.hasSave()
+}
+
+function handleManualSave() {
+  audioManager.playClick()
+  gameStore.saveGame()
+  const now = new Date()
+  autoSaveTime.value = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+  autoSaveToast.value = true
+  setTimeout(() => { autoSaveToast.value = false }, 2000)
+}
+
+function handleOpenSaveManager() {
+  audioManager.playClick()
+  showSaveSlotDialog.value = true
+}
+
 onMounted(() => {
+  gameStore.tryMigrateLegacySave()
   hasExistingSave.value = gameStore.hasSave()
   seasonStore.initSeason()
   taskStore.initTaskCenter()
@@ -100,6 +166,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopHeartbeat()
+  stopAutoSave()
 })
 
 function startHeartbeat() {
@@ -155,17 +222,23 @@ const bgClass = () => {
 
           <div class="space-y-3">
             <button
-              @click="handleNewGame"
+              @click="handleNewGame()"
               class="w-full py-4 bg-red-600 hover:bg-red-500 rounded text-white font-medium text-lg transition-all hover:scale-105"
             >
               🏛️ 开始新游戏
             </button>
             <button
               v-if="hasExistingSave"
-              @click="handleContinue"
+              @click="handleContinue()"
               class="w-full py-3 bg-gray-800 hover:bg-gray-700 rounded text-gray-300 font-medium transition-colors"
             >
               📂 继续游戏
+            </button>
+            <button
+              @click="handleOpenSaveManager"
+              class="w-full py-3 bg-gray-900 hover:bg-gray-800 border border-gray-700/50 rounded text-gray-400 font-medium transition-colors"
+            >
+              💾 存档管理
             </button>
           </div>
 
@@ -229,13 +302,51 @@ const bgClass = () => {
           <Workbench />
         </div>
       </div>
+
+      <div class="fixed bottom-3 right-3 flex items-center gap-2 z-40">
+        <button
+          @click="handleManualSave"
+          class="px-3 py-1.5 bg-gray-900/80 hover:bg-gray-800 border border-gray-700/50 rounded text-gray-400 hover:text-gray-200 text-xs transition-colors backdrop-blur-sm"
+        >
+          💾 保存
+        </button>
+        <button
+          @click="handleOpenSaveManager"
+          class="px-3 py-1.5 bg-gray-900/80 hover:bg-gray-800 border border-gray-700/50 rounded text-gray-400 hover:text-gray-200 text-xs transition-colors backdrop-blur-sm"
+        >
+          📂 存档
+        </button>
+      </div>
     </template>
 
     <EventModal />
     <OfflineEarningsDialog />
+    <SaveSlotDialog
+      v-model="showSaveSlotDialog"
+      @select="handleSlotSelect"
+      @delete="handleSlotDelete"
+    />
     <HomeSeasonCard />
     <HomeTaskCard />
     <TaskReminder />
+
+    <Transition name="fade">
+      <div
+        v-if="autoSaveToast"
+        class="fixed top-4 right-4 z-50 bg-blue-900/90 text-blue-300 px-4 py-2 rounded-lg text-sm border border-blue-700/50 shadow-lg"
+      >
+        ✅ 已保存 {{ autoSaveTime }}
+      </div>
+    </Transition>
+
+    <Transition name="fade">
+      <div
+        v-if="cloudPromptMessage"
+        class="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-amber-900/90 text-amber-300 px-4 py-2 rounded-lg text-sm border border-amber-700/50 shadow-lg max-w-sm text-center"
+      >
+        ☁️ {{ cloudPromptMessage }}
+      </div>
+    </Transition>
   </div>
 </template>
 

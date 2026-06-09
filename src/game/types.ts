@@ -106,3 +106,31 @@ export interface SaveData {
   timestamp: number
   version: string
 }
+
+export interface SaveSlotInfo {
+  slotIndex: number
+  name: string
+  timestamp: number
+  day: number
+  version: string
+  isAutoSave: boolean
+  cloudSyncStatus: CloudSyncStatus
+}
+
+export type CloudSyncStatus = 'none' | 'syncing' | 'synced' | 'failed'
+
+export interface SaveSlotManifest {
+  version: string
+  slots: SaveSlotInfo[]
+  activeSlotIndex: number
+  lastAutoSaveTime: number
+  autoSaveIntervalMs: number
+}
+
+export type VersionMigrationFn = (data: Record<string, unknown>) => Record<string, unknown>
+
+export interface VersionMigrationEntry {
+  fromVersion: string
+  toVersion: string
+  migrate: VersionMigrationFn
+}

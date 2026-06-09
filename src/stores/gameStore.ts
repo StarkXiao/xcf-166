@@ -1,6 +1,17 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { GameStats, TimePhase, SaveData } from '../game/types'
+import {
+  saveSlot,
+  loadSlot,
+  deleteSlot,
+  getActiveSlotIndex,
+  setActiveSlotIndex,
+  hasSlotData,
+  isSlotOccupied,
+  migrateLegacySave,
+  CURRENT_VERSION
+} from '../game/saveManager'
 import { useOrderStore } from './orderStore'
 import { useEventStore } from './eventStore'
 import { useSeasonStore } from './seasonStore'
@@ -11,8 +22,7 @@ import { useFriendStore } from './friendStore'
 import { useTaskStore } from './taskStore'
 import { useOfflineStore } from './offlineStore'
 
-const SAVE_KEY = 'b2_morgue_save'
-const SAVE_VERSION = '2.3.0'
+export { CURRENT_VERSION as SAVE_VERSION }
 
 export const useGameStore = defineStore('game', () => {
   const timePhase = ref<TimePhase>('day')
@@ -176,7 +186,7 @@ export const useGameStore = defineStore('game', () => {
     }
   }
 
-  function saveGame(): SaveData {
+  function buildSaveData(): SaveData {
     const orderStore = useOrderStore()
     const eventStore = useEventStore()
     const characterStore = useCharacterStore()
@@ -205,58 +215,70 @@ export const useGameStore = defineStore('game', () => {
       characterData,
       shopData,
       timestamp: Date.now(),
-      version: SAVE_VERSION
+      version: CURRENT_VERSION
     }
-    localStorage.setItem(SAVE_KEY, JSON.stringify(saveData))
     return saveData
   }
 
-  function loadGame(): SaveData | null {
-    const raw = localStorage.getItem(SAVE_KEY)
-    if (!raw) return null
-    try {
-      const data = JSON.parse(raw) as SaveData
-      if (data.version !== SAVE_VERSION) {
-        console.warn('存档版本不兼容，将使用新存档')
-        return null
-      }
-      stats.value = { ...data.stats }
-      timePhase.value = data.timePhase
-      day.value = data.day
-      isProcessing.value = data.isProcessing && data.processingProgress > 0 && data.processingProgress < 100
-      currentProcessingStep.value = data.isProcessing ? data.currentProcessingStep : null
-      processingProgress.value = data.isProcessing ? data.processingProgress : 0
-      gameStarted.value = true
+  function saveGame(slotIndex?: number): SaveData {
+    const saveData = buildSaveData()
+    const slot = slotIndex ?? getActiveSlotIndex()
+    saveSlot(slot, saveData, false)
+    return saveData
+  }
 
-      if (data.characterData) {
-        const characterStore = useCharacterStore()
-        characterStore.restoreFromSaveData(data.characterData)
-      }
+  function loadGame(slotIndex?: number): SaveData | null {
+    const slot = slotIndex ?? getActiveSlotIndex()
+    const data = loadSlot(slot)
+    if (!data) return null
 
-      if (data.shopData) {
-        const shopStore = useShopStore()
-        shopStore.restoreFromSave(data.shopData)
-      }
+    stats.value = { ...data.stats }
+    timePhase.value = data.timePhase
+    day.value = data.day
+    isProcessing.value = data.isProcessing && data.processingProgress > 0 && data.processingProgress < 100
+    currentProcessingStep.value = data.isProcessing ? data.currentProcessingStep : null
+    processingProgress.value = data.isProcessing ? data.processingProgress : 0
+    gameStarted.value = true
 
-      return data
-    } catch {
-      console.error('存档读取失败')
-      return null
+    if (data.characterData) {
+      const characterStore = useCharacterStore()
+      characterStore.restoreFromSaveData(data.characterData)
     }
+
+    if (data.shopData) {
+      const shopStore = useShopStore()
+      shopStore.restoreFromSave(data.shopData)
+    }
+
+    setActiveSlotIndex(slot)
+    return data
   }
 
-  function hasSave(): boolean {
-    return localStorage.getItem(SAVE_KEY) !== null
+  function hasSave(slotIndex?: number): boolean {
+    if (slotIndex !== undefined) return hasSlotData(slotIndex)
+    for (let i = 0; i < 5; i++) {
+      if (isSlotOccupied(i)) return true
+    }
+    return localStorage.getItem('b2_morgue_save') !== null
   }
 
-  function deleteSave() {
-    localStorage.removeItem(SAVE_KEY)
+  function deleteSave(slotIndex?: number) {
+    if (slotIndex !== undefined) {
+      deleteSlot(slotIndex)
+    } else {
+      const activeSlot = getActiveSlotIndex()
+      deleteSlot(activeSlot)
+    }
     const characterStore = useCharacterStore()
     characterStore.resetCharacters()
     const shopStore = useShopStore()
     shopStore.resetShop()
     const offlineStore = useOfflineStore()
     offlineStore.resetOffline()
+  }
+
+  function tryMigrateLegacySave(): boolean {
+    return migrateLegacySave()
   }
 
   return {
@@ -280,9 +302,11 @@ export const useGameStore = defineStore('game', () => {
     setProcessing,
     advancePhase,
     completeOrder,
+    buildSaveData,
     saveGame,
     loadGame,
     hasSave,
-    deleteSave
+    deleteSave,
+    tryMigrateLegacySave
   }
 })
