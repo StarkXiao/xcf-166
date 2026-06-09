@@ -94,6 +94,12 @@ function handleGoToShop() {
   router.push('/shop')
 }
 
+function goToDungeon() {
+  audioManager.playClick()
+  showSaveMenu.value = false
+  router.push('/dungeon')
+}
+
 const phaseButtonText = () => {
   if (gameStore.timePhase === 'day') {
     return '🌙 进入夜晚'
@@ -211,6 +217,12 @@ const phaseButtonText = () => {
                 class="w-full px-4 py-2 text-left text-sm text-purple-400 hover:bg-purple-900/30 transition-colors"
               >
                 🎭 角色养成
+              </button>
+              <button
+                @click="goToDungeon"
+                class="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-red-900/30 transition-colors"
+              >
+                ⚔️ 挑战副本
               </button>
               <button
                 @click="handleRestart"

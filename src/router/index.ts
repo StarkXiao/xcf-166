@@ -5,6 +5,7 @@ import CharacterPage from '@/pages/CharacterPage.vue'
 import AchievementPage from '@/pages/AchievementPage.vue'
 import ShopPage from '@/pages/ShopPage.vue'
 import FriendPage from '@/pages/FriendPage.vue'
+import DungeonPage from '@/pages/DungeonPage.vue'
 import AdminLayout from '@/components/admin/AdminLayout.vue'
 import ActivityListPage from '@/pages/admin/ActivityListPage.vue'
 import ActivityEditPage from '@/pages/admin/ActivityEditPage.vue'
@@ -41,6 +42,11 @@ const routes: RouteRecordRaw[] = [
     path: '/friends',
     name: 'friends',
     component: FriendPage,
+  },
+  {
+    path: '/dungeon',
+    name: 'dungeon',
+    component: DungeonPage,
   },
   {
     path: '/shop',
