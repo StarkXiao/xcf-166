@@ -12,7 +12,7 @@ import NotificationCenter from '@/components/achievement/NotificationCenter.vue'
 import FriendNotificationCenter from '@/components/friend/FriendNotificationCenter.vue'
 import FriendEntryCard from '@/components/friend/FriendEntryCard.vue'
 import TutorialGuide from '@/components/tutorial/TutorialGuide.vue'
-import { Bell, Trophy, Store, HelpCircle, Heart, Users, Mail } from 'lucide-vue-next'
+import { Bell, Trophy, Store, HelpCircle, Heart, Users, Mail, BarChart3 } from 'lucide-vue-next'
 import { useRouter, useRoute } from 'vue-router'
 
 const achievementStore = useAchievementStore()
@@ -87,6 +87,10 @@ function goToMail() {
   router.push('/mail')
 }
 
+function goToDashboard() {
+  router.push('/dashboard')
+}
+
 function toggleFriendNotificationCenter() {
   showFriendNotificationCenter.value = !showFriendNotificationCenter.value
 }
@@ -105,6 +109,15 @@ function toggleFriendNotificationCenter() {
         title="道具商城"
       >
         <Store class="w-5 h-5 text-amber-400 group-hover:text-amber-300" />
+      </button>
+
+      <button
+        @click="goToDashboard"
+        class="relative p-3 bg-gray-900/90 backdrop-blur-sm rounded-xl border border-gray-700 hover:bg-gray-800 transition-colors group"
+        :class="{ 'ring-2 ring-cyan-500': route.name === 'dashboard' }"
+        title="数据驾驶舱"
+      >
+        <BarChart3 class="w-5 h-5 text-cyan-400 group-hover:text-cyan-300" />
       </button>
 
       <button
