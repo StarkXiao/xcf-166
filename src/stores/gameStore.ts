@@ -12,7 +12,7 @@ import { useTaskStore } from './taskStore'
 import { useOfflineStore } from './offlineStore'
 
 const SAVE_KEY = 'b2_morgue_save'
-const SAVE_VERSION = '2.2.0'
+const SAVE_VERSION = '2.3.0'
 
 export const useGameStore = defineStore('game', () => {
   const timePhase = ref<TimePhase>('day')

@@ -2,7 +2,9 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type {
   OfflineEarnings,
+  OfflineEarningsResult,
   OfflineEarningsLog,
+  OfflineEarningsCapInfo,
   OfflineEarningsConfig,
   OfflineEarningsState,
 } from '@/types/offline'
@@ -11,10 +13,22 @@ import { useGameStore } from './gameStore'
 
 const STORAGE_KEY = 'offline_earnings_data'
 
+const EMPTY_CAP_INFO: OfflineEarningsCapInfo = {
+  moneyCapped: false,
+  reputationCapped: false,
+  sanityCapped: false,
+  moneyCapValue: DEFAULT_OFFLINE_CONFIG.moneyCap,
+  reputationCapValue: DEFAULT_OFFLINE_CONFIG.reputationCap,
+  sanityCapValue: DEFAULT_OFFLINE_CONFIG.sanityCap,
+}
+
 export const useOfflineStore = defineStore('offline', () => {
   const lastOnlineTime = ref(Date.now())
   const pendingEarnings = ref<OfflineEarnings | null>(null)
+  const pendingRawEarnings = ref<OfflineEarnings | null>(null)
   const pendingOfflineMinutes = ref(0)
+  const pendingEffectiveMinutes = ref(0)
+  const pendingCapInfo = ref<OfflineEarningsCapInfo>({ ...EMPTY_CAP_INFO })
   const logs = ref<OfflineEarningsLog[]>([])
   const showClaimDialog = ref(false)
   const config = ref<OfflineEarningsConfig>({ ...DEFAULT_OFFLINE_CONFIG })
@@ -33,6 +47,13 @@ export const useOfflineStore = defineStore('offline', () => {
 
   const hasPendingEarnings = computed(() => pendingEarnings.value !== null)
 
+  const isTimeCapped = computed(() => pendingOfflineMinutes.value > pendingEffectiveMinutes.value)
+
+  const anyValueCapped = computed(() => {
+    const ci = pendingCapInfo.value
+    return ci.moneyCapped || ci.reputationCapped || ci.sanityCapped
+  })
+
   function updateLastOnlineTime() {
     lastOnlineTime.value = Date.now()
     saveToStorage()
@@ -48,21 +69,24 @@ export const useOfflineStore = defineStore('offline', () => {
     }
 
     const gameStore = useGameStore()
-    const earnings = calculateOfflineEarnings(
+    const result: OfflineEarningsResult = calculateOfflineEarnings(
       offlineMinutes,
       config.value,
       gameStore.day,
       gameStore.stats.reputation
     )
 
-    const hasAnyEarning = earnings.money > 0 || earnings.reputation > 0 || earnings.sanity > 0
+    const hasAnyEarning = result.earnings.money > 0 || result.earnings.reputation > 0 || result.earnings.sanity > 0
     if (!hasAnyEarning) {
       return null
     }
 
-    pendingEarnings.value = earnings
+    pendingEarnings.value = result.earnings
+    pendingRawEarnings.value = result.rawEarnings
     pendingOfflineMinutes.value = offlineMinutes
-    return earnings
+    pendingEffectiveMinutes.value = result.effectiveMinutes
+    pendingCapInfo.value = result.capInfo
+    return result.earnings
   }
 
   function claimEarnings(): OfflineEarnings | null {
@@ -84,7 +108,11 @@ export const useOfflineStore = defineStore('offline', () => {
       id: `offline_${Date.now()}`,
       claimedAt: Date.now(),
       offlineMinutes: pendingOfflineMinutes.value,
+      effectiveMinutes: pendingEffectiveMinutes.value,
+      timeCapped: pendingOfflineMinutes.value > pendingEffectiveMinutes.value,
+      capInfo: { ...pendingCapInfo.value },
       earnings: { ...pendingEarnings.value },
+      rawEarnings: { ...(pendingRawEarnings.value || pendingEarnings.value) },
     }
 
     logs.value.unshift(logEntry)
@@ -94,7 +122,10 @@ export const useOfflineStore = defineStore('offline', () => {
 
     const claimed = { ...pendingEarnings.value }
     pendingEarnings.value = null
+    pendingRawEarnings.value = null
     pendingOfflineMinutes.value = 0
+    pendingEffectiveMinutes.value = 0
+    pendingCapInfo.value = { ...EMPTY_CAP_INFO }
     showClaimDialog.value = false
     lastOnlineTime.value = Date.now()
 
@@ -106,7 +137,10 @@ export const useOfflineStore = defineStore('offline', () => {
 
   function dismissEarnings() {
     pendingEarnings.value = null
+    pendingRawEarnings.value = null
     pendingOfflineMinutes.value = 0
+    pendingEffectiveMinutes.value = 0
+    pendingCapInfo.value = { ...EMPTY_CAP_INFO }
     showClaimDialog.value = false
     lastOnlineTime.value = Date.now()
     saveToStorage()
@@ -155,7 +189,10 @@ export const useOfflineStore = defineStore('offline', () => {
   function resetOffline() {
     lastOnlineTime.value = Date.now()
     pendingEarnings.value = null
+    pendingRawEarnings.value = null
     pendingOfflineMinutes.value = 0
+    pendingEffectiveMinutes.value = 0
+    pendingCapInfo.value = { ...EMPTY_CAP_INFO }
     logs.value = []
     showClaimDialog.value = false
     localStorage.removeItem(STORAGE_KEY)
@@ -164,7 +201,10 @@ export const useOfflineStore = defineStore('offline', () => {
   return {
     lastOnlineTime,
     pendingEarnings,
+    pendingRawEarnings,
     pendingOfflineMinutes,
+    pendingEffectiveMinutes,
+    pendingCapInfo,
     logs,
     showClaimDialog,
     config,
@@ -172,6 +212,8 @@ export const useOfflineStore = defineStore('offline', () => {
     totalClaimedReputation,
     totalClaimedSanity,
     hasPendingEarnings,
+    isTimeCapped,
+    anyValueCapped,
     updateLastOnlineTime,
     checkOfflineEarnings,
     claimEarnings,
