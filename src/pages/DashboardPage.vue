@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/gameStore'
 import { useShopStore } from '@/stores/shopStore'
@@ -17,17 +17,11 @@ import {
   CalendarCheck,
   Gamepad2,
   TrendingUp,
-  TrendingDown,
   Activity,
-  ShoppingBag,
   Sword,
-  Trophy,
-  Brain,
   Clock,
   Star,
   Zap,
-  Target,
-  Heart,
   BarChart3,
 } from 'lucide-vue-next'
 
@@ -43,6 +37,42 @@ const orderStore = useOrderStore()
 
 const selectedPeriod = ref<'7' | '14' | '30'>('7')
 
+function toDateString(ts: number): string {
+  return new Date(ts).toDateString()
+}
+
+function toDateKey(ts: number): string {
+  const d = new Date(ts)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+const allTimestamps = computed(() => {
+  const ts: number[] = []
+  achievementStore.behaviorEvents.forEach(e => ts.push(e.timestamp))
+  dungeonStore.battleHistory.forEach(b => ts.push(b.completedAt))
+  shopStore.completedOrders.forEach(o => ts.push(o.createdAt))
+  activityStore.events.forEach(e => ts.push(e.timestamp))
+  return ts.sort((a, b) => a - b)
+})
+
+const activeDateSet = computed(() => {
+  const dates = new Set<string>()
+  achievementStore.behaviorEvents.forEach(e => dates.add(toDateKey(e.timestamp)))
+  dungeonStore.battleHistory.forEach(b => dates.add(toDateKey(b.completedAt)))
+  shopStore.completedOrders.forEach(o => dates.add(toDateKey(o.createdAt)))
+  activityStore.events.forEach(e => dates.add(toDateKey(e.timestamp)))
+  return dates
+})
+
+const firstEventTime = computed(() => {
+  if (allTimestamps.value.length === 0) return Date.now()
+  return allTimestamps.value[0]
+})
+
+const totalCalendarDays = computed(() => {
+  return Math.max(1, Math.ceil((Date.now() - firstEventTime.value) / (24 * 60 * 60 * 1000)) + 1)
+})
+
 const userActivityMetrics = computed(() => {
   const friendCount = friendStore.friends.length
   const totalOrdersCompleted = gameStore.stats.totalOrdersCompleted
@@ -52,9 +82,22 @@ const userActivityMetrics = computed(() => {
   const reputation = gameStore.stats.reputation
   const sanityPercent = Math.round((gameStore.stats.sanity / gameStore.stats.maxSanity) * 100)
 
-  const dailyActive = Math.min(100, Math.round((totalOrdersCompleted / Math.max(day, 1)) * 40 + reputation * 0.5))
-  const weeklyActive = Math.min(100, Math.round(dailyActive * 0.85 + friendCount * 3))
-  const monthlyActive = Math.min(100, Math.round(dailyActive * 0.7 + totalRelicsProcessed * 0.5))
+  const behaviorEvents = achievementStore.behaviorEvents
+  const totalActions = behaviorEvents.length
+  const activeDays = activeDateSet.value.size
+  const engagementRate = Math.round((activeDays / totalCalendarDays.value) * 100)
+  const avgActionsPerActiveDay = activeDays > 0 ? (totalActions / activeDays).toFixed(1) : '0'
+
+  const loginEvents = behaviorEvents.filter(e => e.eventType === 'login')
+  const totalLoginDays = loginEvents.length > 0
+    ? new Set(loginEvents.map(e => toDateKey(e.timestamp))).size
+    : achievementStore.totalLoginDays
+
+  const consecutiveLogins = achievementStore.consecutiveLoginDays
+
+  const orderEvents = behaviorEvents.filter(e => e.eventType === 'order_completed')
+  const orderDates = new Set(orderEvents.map(e => toDateKey(e.timestamp)))
+  const orderActiveDays = orderDates.size
 
   return {
     day,
@@ -64,9 +107,14 @@ const userActivityMetrics = computed(() => {
     avgOrdersPerDay,
     reputation,
     sanityPercent,
-    dailyActive,
-    weeklyActive,
-    monthlyActive,
+    activeDays,
+    totalCalendarDays: totalCalendarDays.value,
+    engagementRate,
+    totalActions,
+    avgActionsPerActiveDay,
+    totalLoginDays,
+    consecutiveLogins,
+    orderActiveDays,
   }
 })
 
@@ -110,7 +158,6 @@ const paymentConversionMetrics = computed(() => {
 
   const inventoryCount = shopStore.inventory.reduce((sum, i) => sum + i.quantity, 0)
   const activeDiscounts = shopStore.activeDiscounts.length
-  const cartItems = shopStore.cartItemCount
 
   const itemsOnSale = shopStore.items.filter(item => {
     return shopStore.activeDiscounts.some(d =>
@@ -119,11 +166,19 @@ const paymentConversionMetrics = computed(() => {
     )
   }).length
 
-  const conversionRate = shopStore.items.length > 0
-    ? Math.round((totalPurchases / (totalPurchases + shopStore.items.length)) * 100)
-    : 0
+  const uniqueSkusPurchased = Object.keys(shopStore.purchaseHistory).length
+  const totalSkus = shopStore.items.length
+  const skuPenetrationRate = totalSkus > 0 ? Math.round((uniqueSkusPurchased / totalSkus) * 100) : 0
 
-  const repurchaseRate = totalPurchases > 0 ? Math.min(100, Math.round((Object.keys(shopStore.purchaseHistory).length / Math.max(totalPurchases, 1)) * 100)) : 0
+  const day = gameStore.day
+  const avgDailySpend = day > 0 ? Math.round(totalRevenue / day) : 0
+
+  const discountedPurchases = orders.filter(o => o.discountApplied > 0).length
+  const discountUtilization = totalPurchases > 0 ? Math.round((discountedPurchases / totalPurchases) * 100) : 0
+
+  const shopBehaviorEvents = achievementStore.behaviorEvents.filter(e => e.eventType === 'shop_purchase')
+  const purchaseDates = new Set(shopBehaviorEvents.map(e => toDateKey(e.timestamp)))
+  const purchaseActiveDays = purchaseDates.size
 
   return {
     totalPurchases,
@@ -132,8 +187,12 @@ const paymentConversionMetrics = computed(() => {
     inventoryCount,
     activeDiscounts,
     itemsOnSale,
-    conversionRate,
-    repurchaseRate,
+    skuPenetrationRate,
+    discountUtilization,
+    avgDailySpend,
+    uniqueSkusPurchased,
+    totalSkus,
+    purchaseActiveDays,
     currentMoney: gameStore.stats.money,
   }
 })
@@ -173,27 +232,88 @@ const activityParticipationMetrics = computed(() => {
 
 const retentionMetrics = computed(() => {
   const day = gameStore.day
+  const behaviorEvents = achievementStore.behaviorEvents
+  const battleHistory = dungeonStore.battleHistory
+
+  const eventDateKeys = new Set<string>()
+  behaviorEvents.forEach(e => eventDateKeys.add(toDateKey(e.timestamp)))
+  battleHistory.forEach(b => eventDateKeys.add(toDateKey(b.completedAt)))
+  shopStore.completedOrders.forEach(o => eventDateKeys.add(toDateKey(o.createdAt)))
+
+  const sortedDates = Array.from(eventDateKeys).sort()
+  const firstDate = sortedDates[0]
+  const lastDate = sortedDates[sortedDates.length - 1]
+
+  let day1Retention = 0
+  let day7Retention = 0
+  let day30Retention = 0
+
+  if (firstDate && eventDateKeys.size > 0) {
+    const first = new Date(firstDate)
+    const day1Target = new Date(first)
+    day1Target.setDate(day1Target.getDate() + 1)
+    const day1Key = toDateKey(day1Target.getTime())
+    day1Retention = eventDateKeys.has(day1Key) ? 100 : 0
+
+    const day7Target = new Date(first)
+    day7Target.setDate(day7Target.getDate() + 6)
+    const day7Key = toDateKey(day7Target.getTime())
+    let hasDay7 = false
+    for (let offset = 0; offset <= 6; offset++) {
+      const check = new Date(day7Target)
+      check.setDate(check.getDate() - (6 - offset))
+      if (eventDateKeys.has(toDateKey(check.getTime()))) {
+        hasDay7 = true
+        break
+      }
+    }
+    day7Retention = hasDay7 ? 100 : 0
+
+    const day30Target = new Date(first)
+    day30Target.setDate(day30Target.getDate() + 29)
+    const day30Key = toDateKey(day30Target.getTime())
+    let hasDay30 = false
+    for (let offset = 0; offset <= 29; offset++) {
+      const check = new Date(day30Target)
+      check.setDate(check.getDate() - (29 - offset))
+      if (eventDateKeys.has(toDateKey(check.getTime()))) {
+        hasDay30 = true
+        break
+      }
+    }
+    day30Retention = hasDay30 ? 100 : 0
+
+    if (sortedDates.length >= 2) {
+      const last = new Date(lastDate)
+      const spanDays = Math.max(1, Math.round((last.getTime() - first.getTime()) / (24 * 60 * 60 * 1000)))
+      day1Retention = Math.round((eventDateKeys.size / (spanDays + 1)) * 100)
+      day7Retention = spanDays >= 6 ? day1Retention : Math.round((eventDateKeys.size / (spanDays + 1)) * 100)
+      day30Retention = spanDays >= 29 ? Math.round((eventDateKeys.size / (spanDays + 1)) * 100) : Math.round((eventDateKeys.size / (spanDays + 1)) * 100)
+    }
+  }
+
   const totalClears = dungeonStore.totalClearCount
   const totalDungeonsCleared = dungeonStore.totalDungeonsCleared
   const totalStars = dungeonStore.totalStarsEarned
   const maxStars = dungeonStore.maxStarsPossible
   const starRate = maxStars > 0 ? Math.round((totalStars / maxStars) * 100) : 0
 
-  const battleHistory = dungeonStore.battleHistory
   const victories = battleHistory.filter(b => b.result === 'victory').length
   const defeats = battleHistory.filter(b => b.result === 'defeat').length
   const winRate = battleHistory.length > 0 ? Math.round((victories / battleHistory.length) * 100) : 0
 
-  const day1Retention = Math.min(100, Math.round(85 + Math.random() * 10))
-  const day7Retention = Math.min(100, Math.round(55 + Math.random() * 15))
-  const day30Retention = Math.min(100, Math.round(25 + Math.random() * 15))
-
-  const avgSessionDuration = Math.round(120 + Math.random() * 180)
+  const avgBattleDuration = battleHistory.length > 0
+    ? Math.round(battleHistory.reduce((sum, b) => sum + b.duration, 0) / battleHistory.length / 1000)
+    : 0
   const avgBattlesPerDay = day > 0 ? (battleHistory.length / day).toFixed(1) : '0'
 
   const dungeonProgresses = dungeonStore.dungeonProgresses
   const unlockedDungeons = dungeonProgresses.filter(dp => dp.status !== 'locked').length
   const totalDungeons = dungeonProgresses.length || 1
+
+  const dayPassedEvents = behaviorEvents.filter(e => e.eventType === 'day_passed')
+  const gameDaysPlayed = dayPassedEvents.length
+  const engagementContinuity = day > 0 ? Math.round((gameDaysPlayed / day) * 100) : 0
 
   return {
     day,
@@ -207,35 +327,80 @@ const retentionMetrics = computed(() => {
     day1Retention,
     day7Retention,
     day30Retention,
-    avgSessionDuration,
+    avgBattleDuration,
     avgBattlesPerDay,
     dungeonExploreRate: Math.round((unlockedDungeons / totalDungeons) * 100),
+    engagementContinuity,
+    gameDaysPlayed,
+    activeCalendarDays: eventDateKeys.size,
   }
 })
 
 const dailyTrendData = computed(() => {
   const days = parseInt(selectedPeriod.value)
-  const data = []
-  const baseActivity = 60
-  const baseOrders = gameStore.stats.totalOrdersCompleted / Math.max(gameStore.day, 1)
-  const baseRevenue = shopStore.completedOrders.length / Math.max(gameStore.day, 1) * 100
+  const now = Date.now()
+  const startTime = now - days * 24 * 60 * 60 * 1000
+
+  const behaviorEvents = achievementStore.behaviorEvents.filter(e => e.timestamp >= startTime)
+  const battleEvents = dungeonStore.battleHistory.filter(b => b.completedAt >= startTime)
+  const shopOrders = shopStore.completedOrders.filter(o => o.createdAt >= startTime)
+  const actEvents = activityStore.events.filter(e => e.timestamp >= startTime)
+
+  const dailyMap = new Map<string, { actions: number; orders: number; revenue: number }>()
 
   for (let i = days - 1; i >= 0; i--) {
     const date = new Date()
     date.setDate(date.getDate() - i)
+    const key = toDateKey(date.getTime())
     const label = `${date.getMonth() + 1}/${date.getDate()}`
+    dailyMap.set(key, { actions: 0, orders: 0, revenue: 0 })
+  }
 
-    const noise1 = Math.sin(i * 0.8) * 15
-    const noise2 = Math.cos(i * 1.2) * 10
-    const noise3 = Math.sin(i * 0.5 + 2) * 8
+  behaviorEvents.forEach(e => {
+    const key = toDateKey(e.timestamp)
+    const entry = dailyMap.get(key)
+    if (entry) entry.actions++
+  })
 
+  battleEvents.forEach(b => {
+    const key = toDateKey(b.completedAt)
+    const entry = dailyMap.get(key)
+    if (entry) entry.actions += 1
+  })
+
+  actEvents.forEach(e => {
+    const key = toDateKey(e.timestamp)
+    const entry = dailyMap.get(key)
+    if (entry) entry.actions += 1
+  })
+
+  const orderEvents = behaviorEvents.filter(e => e.eventType === 'order_completed')
+  orderEvents.forEach(e => {
+    const key = toDateKey(e.timestamp)
+    const entry = dailyMap.get(key)
+    if (entry) entry.orders++
+  })
+
+  shopOrders.forEach(o => {
+    const key = toDateKey(o.createdAt)
+    const entry = dailyMap.get(key)
+    if (entry) entry.revenue += o.totalPrice.money
+  })
+
+  const data: { label: string; activity: number; orders: number; revenue: number }[] = []
+  const sortedKeys = Array.from(dailyMap.keys()).sort()
+  sortedKeys.forEach(key => {
+    const date = new Date(key)
+    const label = `${date.getMonth() + 1}/${date.getDate()}`
+    const entry = dailyMap.get(key)!
     data.push({
       label,
-      activity: Math.round(Math.max(10, Math.min(100, baseActivity + noise1 + (days - i) * 1.5))),
-      orders: Math.round(Math.max(1, baseOrders * 2 + noise2 + (days - i) * 0.3)),
-      revenue: Math.round(Math.max(0, baseRevenue + noise3 + (days - i) * 5)),
+      activity: entry.actions,
+      orders: entry.orders,
+      revenue: entry.revenue,
     })
-  }
+  })
+
   return data
 })
 
@@ -392,14 +557,14 @@ function goBack() {
       <div class="grid grid-cols-5 gap-4">
         <div class="bg-gray-800/80 backdrop-blur-sm rounded-xl p-4 border border-cyan-500/20 hover:border-cyan-500/40 transition-all">
           <div class="flex items-center justify-between mb-2">
-            <span class="text-xs text-gray-400">日活跃度</span>
+            <span class="text-xs text-gray-400">活跃率</span>
             <div class="w-8 h-8 rounded-lg bg-cyan-500/15 flex items-center justify-center">
               <Activity class="w-4 h-4 text-cyan-400" />
             </div>
           </div>
-          <div class="text-2xl font-bold text-cyan-400">{{ userActivityMetrics.dailyActive }}%</div>
+          <div class="text-2xl font-bold text-cyan-400">{{ userActivityMetrics.engagementRate }}%</div>
           <div class="mt-2 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-            <div class="h-full bg-gradient-to-r from-cyan-500 to-cyan-300 rounded-full transition-all" :style="{ width: `${userActivityMetrics.dailyActive}%` }"></div>
+            <div class="h-full bg-gradient-to-r from-cyan-500 to-cyan-300 rounded-full transition-all" :style="{ width: `${userActivityMetrics.engagementRate}%` }"></div>
           </div>
         </div>
 
@@ -418,14 +583,14 @@ function goBack() {
 
         <div class="bg-gray-800/80 backdrop-blur-sm rounded-xl p-4 border border-amber-500/20 hover:border-amber-500/40 transition-all">
           <div class="flex items-center justify-between mb-2">
-            <span class="text-xs text-gray-400">付费转化率</span>
+            <span class="text-xs text-gray-400">SKU渗透率</span>
             <div class="w-8 h-8 rounded-lg bg-amber-500/15 flex items-center justify-center">
               <CreditCard class="w-4 h-4 text-amber-400" />
             </div>
           </div>
-          <div class="text-2xl font-bold text-amber-400">{{ paymentConversionMetrics.conversionRate }}%</div>
+          <div class="text-2xl font-bold text-amber-400">{{ paymentConversionMetrics.skuPenetrationRate }}%</div>
           <div class="mt-2 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-            <div class="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full transition-all" :style="{ width: `${paymentConversionMetrics.conversionRate}%` }"></div>
+            <div class="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full transition-all" :style="{ width: `${paymentConversionMetrics.skuPenetrationRate}%` }"></div>
           </div>
         </div>
 
@@ -444,14 +609,14 @@ function goBack() {
 
         <div class="bg-gray-800/80 backdrop-blur-sm rounded-xl p-4 border border-rose-500/20 hover:border-rose-500/40 transition-all">
           <div class="flex items-center justify-between mb-2">
-            <span class="text-xs text-gray-400">次日留存</span>
+            <span class="text-xs text-gray-400">连续活跃率</span>
             <div class="w-8 h-8 rounded-lg bg-rose-500/15 flex items-center justify-center">
               <Gamepad2 class="w-4 h-4 text-rose-400" />
             </div>
           </div>
-          <div class="text-2xl font-bold text-rose-400">{{ retentionMetrics.day1Retention }}%</div>
+          <div class="text-2xl font-bold text-rose-400">{{ retentionMetrics.engagementContinuity }}%</div>
           <div class="mt-2 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-            <div class="h-full bg-gradient-to-r from-rose-500 to-rose-300 rounded-full transition-all" :style="{ width: `${retentionMetrics.day1Retention}%` }"></div>
+            <div class="h-full bg-gradient-to-r from-rose-500 to-rose-300 rounded-full transition-all" :style="{ width: `${retentionMetrics.engagementContinuity}%` }"></div>
           </div>
         </div>
       </div>
@@ -524,8 +689,8 @@ function goBack() {
               <p class="text-xl font-bold text-cyan-400">{{ userActivityMetrics.avgOrdersPerDay }}</p>
             </div>
             <div class="bg-gray-900/60 rounded-lg p-4">
-              <p class="text-xs text-gray-500 mb-1">声望值</p>
-              <p class="text-xl font-bold text-purple-400">{{ userActivityMetrics.reputation }}</p>
+              <p class="text-xs text-gray-500 mb-1">总行为数</p>
+              <p class="text-xl font-bold text-blue-400">{{ userActivityMetrics.totalActions }}</p>
             </div>
             <div class="bg-gray-900/60 rounded-lg p-4">
               <p class="text-xs text-gray-500 mb-1">理智状态</p>
@@ -534,25 +699,27 @@ function goBack() {
           </div>
           <div class="mt-4 space-y-3">
             <div class="flex items-center justify-between text-sm">
-              <span class="text-gray-400">日活 (DAU)</span>
-              <span class="text-cyan-400 font-medium">{{ userActivityMetrics.dailyActive }}%</span>
+              <span class="text-gray-400">活跃天数</span>
+              <span class="text-cyan-400 font-medium">{{ userActivityMetrics.activeDays }} / {{ userActivityMetrics.totalCalendarDays }}</span>
             </div>
             <div class="h-1.5 bg-gray-700 rounded-full overflow-hidden">
-              <div class="h-full bg-cyan-500 rounded-full" :style="{ width: `${userActivityMetrics.dailyActive}%` }"></div>
+              <div class="h-full bg-cyan-500 rounded-full" :style="{ width: `${userActivityMetrics.engagementRate}%` }"></div>
             </div>
             <div class="flex items-center justify-between text-sm">
-              <span class="text-gray-400">周活 (WAU)</span>
-              <span class="text-cyan-400 font-medium">{{ userActivityMetrics.weeklyActive }}%</span>
-            </div>
-            <div class="h-1.5 bg-gray-700 rounded-full overflow-hidden">
-              <div class="h-full bg-cyan-500/70 rounded-full" :style="{ width: `${userActivityMetrics.weeklyActive}%` }"></div>
+              <span class="text-gray-400">登录天数</span>
+              <span class="text-cyan-400 font-medium">{{ userActivityMetrics.totalLoginDays }}</span>
             </div>
             <div class="flex items-center justify-between text-sm">
-              <span class="text-gray-400">月活 (MAU)</span>
-              <span class="text-cyan-400 font-medium">{{ userActivityMetrics.monthlyActive }}%</span>
+              <span class="text-gray-400">连续登录</span>
+              <span class="text-green-400 font-medium">{{ userActivityMetrics.consecutiveLogins }} 天</span>
             </div>
-            <div class="h-1.5 bg-gray-700 rounded-full overflow-hidden">
-              <div class="h-full bg-cyan-500/50 rounded-full" :style="{ width: `${userActivityMetrics.monthlyActive}%` }"></div>
+            <div class="flex items-center justify-between text-sm">
+              <span class="text-gray-400">活跃日均价行为</span>
+              <span class="text-cyan-400 font-medium">{{ userActivityMetrics.avgActionsPerActiveDay }}</span>
+            </div>
+            <div class="flex items-center justify-between text-sm">
+              <span class="text-gray-400">下单活跃天数</span>
+              <span class="text-purple-400 font-medium">{{ userActivityMetrics.orderActiveDays }}</span>
             </div>
           </div>
         </div>
@@ -646,12 +813,28 @@ function goBack() {
             </div>
             <div class="mt-2 pt-3 border-t border-gray-700">
               <div class="flex items-center justify-between text-sm mb-1">
-                <span class="text-gray-400">转化率</span>
-                <span class="text-amber-400 font-medium">{{ paymentConversionMetrics.conversionRate }}%</span>
+                <span class="text-gray-400">SKU渗透率</span>
+                <span class="text-amber-400 font-medium">{{ paymentConversionMetrics.skuPenetrationRate }}%</span>
               </div>
               <div class="h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                <div class="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full" :style="{ width: `${paymentConversionMetrics.conversionRate}%` }"></div>
+                <div class="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full" :style="{ width: `${paymentConversionMetrics.skuPenetrationRate}%` }"></div>
               </div>
+            </div>
+            <div class="flex items-center justify-between text-sm">
+              <span class="text-gray-400">日均消费</span>
+              <span class="text-amber-400 font-medium">{{ paymentConversionMetrics.avgDailySpend }}</span>
+            </div>
+            <div class="flex items-center justify-between text-sm">
+              <span class="text-gray-400">折扣利用率</span>
+              <span class="text-green-400 font-medium">{{ paymentConversionMetrics.discountUtilization }}%</span>
+            </div>
+            <div class="flex items-center justify-between text-sm">
+              <span class="text-gray-400">已购SKU</span>
+              <span class="text-cyan-400 font-medium">{{ paymentConversionMetrics.uniqueSkusPurchased }} / {{ paymentConversionMetrics.totalSkus }}</span>
+            </div>
+            <div class="flex items-center justify-between text-sm">
+              <span class="text-gray-400">购买活跃天数</span>
+              <span class="text-purple-400 font-medium">{{ paymentConversionMetrics.purchaseActiveDays }}</span>
             </div>
           </div>
         </div>
@@ -777,6 +960,16 @@ function goBack() {
                 <span class="text-purple-400 font-medium w-12 text-right">{{ retentionMetrics.day30Retention }}%</span>
               </div>
             </div>
+            <div class="mt-2 pt-2 border-t border-gray-700/50">
+              <div class="flex items-center justify-between text-sm">
+                <span class="text-gray-400">游戏天数活跃</span>
+                <span class="text-cyan-400 font-medium">{{ retentionMetrics.gameDaysPlayed }} / {{ retentionMetrics.day }}</span>
+              </div>
+              <div class="flex items-center justify-between text-sm mt-1">
+                <span class="text-gray-400">日历活跃天数</span>
+                <span class="text-cyan-400 font-medium">{{ retentionMetrics.activeCalendarDays }}</span>
+              </div>
+            </div>
           </div>
           <div class="space-y-3">
             <h4 class="text-xs text-gray-500 uppercase tracking-wider">战斗数据</h4>
@@ -799,6 +992,10 @@ function goBack() {
             <div class="flex items-center justify-between text-sm">
               <span class="text-gray-400">日均战斗</span>
               <span class="text-amber-400 font-medium">{{ retentionMetrics.avgBattlesPerDay }}</span>
+            </div>
+            <div class="flex items-center justify-between text-sm">
+              <span class="text-gray-400">平均战斗时长</span>
+              <span class="text-amber-400 font-medium">{{ formatDuration(retentionMetrics.avgBattleDuration) }}</span>
             </div>
           </div>
         </div>
