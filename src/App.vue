@@ -6,12 +6,13 @@ import { useCharacterStore } from '@/stores/characterStore'
 import { useTutorialStore } from '@/stores/tutorialStore'
 import { useGameStore } from '@/stores/gameStore'
 import { useFriendStore } from '@/stores/friendStore'
+import { useMailStore } from '@/stores/mailStore'
 import AchievementUnlockPopup from '@/components/achievement/AchievementUnlockPopup.vue'
 import NotificationCenter from '@/components/achievement/NotificationCenter.vue'
 import FriendNotificationCenter from '@/components/friend/FriendNotificationCenter.vue'
 import FriendEntryCard from '@/components/friend/FriendEntryCard.vue'
 import TutorialGuide from '@/components/tutorial/TutorialGuide.vue'
-import { Bell, Trophy, Store, HelpCircle, Heart, Users } from 'lucide-vue-next'
+import { Bell, Trophy, Store, HelpCircle, Heart, Users, Mail } from 'lucide-vue-next'
 import { useRouter, useRoute } from 'vue-router'
 
 const achievementStore = useAchievementStore()
@@ -20,6 +21,7 @@ const characterStore = useCharacterStore()
 const tutorialStore = useTutorialStore()
 const gameStore = useGameStore()
 const friendStore = useFriendStore()
+const mailStore = useMailStore()
 const router = useRouter()
 const route = useRoute()
 
@@ -35,6 +37,7 @@ onMounted(() => {
   achievementStore.resyncProgress()
   tutorialStore.initTutorial(characterStore.activeCharacter?.id || 'player_local')
   friendStore.initFriendSystem(characterStore.activeCharacter?.id || 'player_local')
+  mailStore.initMailSystem(characterStore.activeCharacter?.id || 'player_local')
 
   if (!tutorialStore.isCompleted && tutorialStore.analytics.firstLogin) {
     setTimeout(() => {
@@ -78,6 +81,10 @@ function goToShop() {
 
 function goToFriends() {
   router.push('/friends')
+}
+
+function goToMail() {
+  router.push('/mail')
 }
 
 function toggleFriendNotificationCenter() {
@@ -127,6 +134,27 @@ function toggleFriendNotificationCenter() {
           class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold animate-pulse"
         >
           {{ friendStore.totalUnreadCount }}
+        </span>
+      </button>
+
+      <button
+        @click="goToMail"
+        class="relative p-3 bg-gray-900/90 backdrop-blur-sm rounded-xl border border-gray-700 hover:bg-gray-800 transition-colors group"
+        :class="{ 'ring-2 ring-blue-500': route.name === 'mail' }"
+        title="邮件中心"
+      >
+        <Mail class="w-5 h-5 text-blue-400 group-hover:text-blue-300" />
+        <span
+          v-if="mailStore.unreadCount > 0"
+          class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold animate-pulse"
+        >
+          {{ mailStore.unreadCount }}
+        </span>
+        <span
+          v-if="mailStore.unclaimedAttachmentCount > 0"
+          class="absolute -bottom-1 -left-1 w-4 h-4 bg-amber-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold"
+        >
+          {{ mailStore.unclaimedAttachmentCount }}
         </span>
       </button>
 
