@@ -18,6 +18,7 @@ import { useGameStore } from './gameStore'
 import { useSeasonStore } from './seasonStore'
 import { useCharacterStore } from './characterStore'
 import { useActivityStore } from './activityStore'
+import { useMailStore } from './mailStore'
 
 const STORAGE_VERSION = '1.0'
 
@@ -192,6 +193,8 @@ export const useAchievementStore = defineStore('achievement', () => {
       totalSanityRecovered.value = saved.totalSanityRecovered || 0
       totalLevelUps.value = saved.totalLevelUps || 0
       totalExpGained.value = saved.totalExpGained || 0
+      grantedBadges.value = new Map(saved.grantedBadges || [])
+      grantedTitles.value = new Map(saved.grantedTitles || [])
     }
 
     allAchievements.value.forEach(ach => {
@@ -240,7 +243,9 @@ export const useAchievementStore = defineStore('achievement', () => {
       nightFellCount: nightFellCount.value,
       totalSanityRecovered: totalSanityRecovered.value,
       totalLevelUps: totalLevelUps.value,
-      totalExpGained: totalExpGained.value
+      totalExpGained: totalExpGained.value,
+      grantedBadges: Array.from(grantedBadges.value.entries()),
+      grantedTitles: Array.from(grantedTitles.value.entries())
     }
     saveToStorage(data)
   }
@@ -485,27 +490,27 @@ export const useAchievementStore = defineStore('achievement', () => {
     const ach = getAchievementById(achievementId)
     if (!ach) return false
 
-    const gameStore = useGameStore()
-    const seasonStore = useSeasonStore()
+    const mailStore = useMailStore()
 
-    ach.rewards.forEach(reward => {
-      switch (reward.type) {
-        case 'currency':
-          if (typeof reward.value === 'number') {
-            gameStore.addMoney(reward.value)
-          }
-          break
-        case 'exp':
-          if (typeof reward.value === 'number') {
-            seasonStore.addExp(reward.value, 'achievement', achievementId)
-          }
-          break
-        case 'badge':
-        case 'title':
-        case 'item':
-          break
-      }
-    })
+    if (ach.rewards.length > 0) {
+      mailStore.sendRewardMail({
+        title: `成就奖励：${ach.name}`,
+        sender: '成就系统',
+        senderAvatar: '🏆',
+        content: `你已达成成就「${ach.name}」，以下是你的奖励，请在30天内领取。`,
+        tag: '成就',
+        source: `achievement_${achievementId}`,
+        attachments: ach.rewards.map(r => ({
+          type: r.type === 'exp' ? 'season_exp' as const : r.type as any,
+          itemId: r.id,
+          name: r.name,
+          icon: r.icon,
+          rarity: r.rarity,
+          value: r.value,
+          count: 1,
+        })),
+      })
+    }
 
     pa.claimed = true
     pa.claimedAt = Date.now()
@@ -513,8 +518,8 @@ export const useAchievementStore = defineStore('achievement', () => {
 
     addNotification({
       type: 'reward_claim',
-      title: '🎁 奖励已领取',
-      message: `成就「${ach.name}」的奖励已发放`,
+      title: '🎁 奖励已发至邮箱',
+      message: `成就「${ach.name}」的奖励已发送至邮箱，请前往领取`,
       icon: '🎁',
       data: { achievementId }
     })
@@ -603,12 +608,20 @@ export const useAchievementStore = defineStore('achievement', () => {
 
   function getUnlockedBadges(): Array<{ id: string; name: string; icon: string; rarity: AchievementRarity }> {
     const badges: Array<{ id: string; name: string; icon: string; rarity: AchievementRarity }> = []
+    const seen = new Set<string>()
+
+    grantedBadges.value.forEach((data, id) => {
+      if (!seen.has(id)) {
+        badges.push({ id, name: data.name, icon: data.icon, rarity: data.rarity })
+        seen.add(id)
+      }
+    })
 
     unlockedAchievements.value.forEach(pa => {
       const ach = getAchievementById(pa.achievementId)
       if (ach) {
         ach.rewards.forEach(reward => {
-          if (reward.type === 'badge') {
+          if (reward.type === 'badge' && !seen.has(reward.id)) {
             badges.push({
               id: reward.id,
               name: reward.name,
@@ -623,14 +636,37 @@ export const useAchievementStore = defineStore('achievement', () => {
     return badges
   }
 
+  const grantedBadges = ref<Map<string, { name: string; icon: string; rarity: AchievementRarity; grantedAt: number }>>(new Map())
+  const grantedTitles = ref<Map<string, { name: string; icon: string; grantedAt: number }>>(new Map())
+
+  function grantBadge(badgeId: string, name: string, icon: string, rarity: AchievementRarity) {
+    if (!grantedBadges.value.has(badgeId)) {
+      grantedBadges.value.set(badgeId, { name, icon, rarity, grantedAt: Date.now() })
+    }
+  }
+
+  function grantTitle(titleId: string, name: string, icon: string) {
+    if (!grantedTitles.value.has(titleId)) {
+      grantedTitles.value.set(titleId, { name, icon, grantedAt: Date.now() })
+    }
+  }
+
   function getUnlockedTitles(): Array<{ id: string; name: string; icon: string }> {
     const titles: Array<{ id: string; name: string; icon: string }> = []
+    const seen = new Set<string>()
+
+    grantedTitles.value.forEach((data, id) => {
+      if (!seen.has(id)) {
+        titles.push({ id, name: data.name, icon: data.icon })
+        seen.add(id)
+      }
+    })
 
     unlockedAchievements.value.forEach(pa => {
       const ach = getAchievementById(pa.achievementId)
       if (ach) {
         ach.rewards.forEach(reward => {
-          if (reward.type === 'title') {
+          if (reward.type === 'title' && !seen.has(reward.id)) {
             titles.push({
               id: reward.id,
               name: reward.name,
@@ -732,6 +768,8 @@ export const useAchievementStore = defineStore('achievement', () => {
     getAchievementsByCategory,
     getUnlockedBadges,
     getUnlockedTitles,
+    grantBadge,
+    grantTitle,
     triggerCustomEvent,
     clearAllData,
     resyncProgress,

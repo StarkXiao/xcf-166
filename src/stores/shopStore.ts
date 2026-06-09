@@ -557,6 +557,19 @@ export const useShopStore = defineStore('shop', () => {
     discounts.value.push(discount)
   }
 
+  function grantItemById(itemId: string, quantity: number = 1) {
+    const existing = inventory.value.find(inv => inv.itemId === itemId)
+    if (existing) {
+      existing.quantity += quantity
+    } else {
+      inventory.value.push({
+        itemId,
+        quantity,
+        acquiredAt: Date.now()
+      })
+    }
+  }
+
   function removeDiscount(discountId: string) {
     discounts.value = discounts.value.filter(d => d.id !== discountId)
   }
@@ -649,6 +662,7 @@ export const useShopStore = defineStore('shop', () => {
     addDiscount,
     removeDiscount,
     addItem,
+    grantItemById,
     updateItem,
     restockItem,
     getShopSaveData,

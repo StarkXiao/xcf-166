@@ -52,15 +52,34 @@ export interface MailStatistics {
   starredCount: number
 }
 
+export interface OperationalAnnouncement {
+  id: string
+  title: string
+  content: string
+  sender: string
+  senderAvatar: string
+  priority: MailPriority
+  tag?: string
+  actionLabel?: string
+  actionUrl?: string
+  attachments: MailAttachment[]
+  startsAt: number
+  expiresAt: number
+  targetSegment?: 'all' | 'new_players' | 'veterans' | 'paying'
+  publishedBy?: string
+  publishedAt?: number
+}
+
 export interface MailSaveData {
   version: string
   timestamp: number
   playerId: string
   mails: Mail[]
   lastDeliveryCheck: number
+  publishedAnnouncementIds: string[]
 }
 
 export const MAIL_STORAGE_KEY = 'mail_system_data'
-export const MAIL_STORAGE_VERSION = '1.0'
+export const MAIL_STORAGE_VERSION = '1.1'
 export const MAX_MAILS = 200
 export const MAIL_EXPIRE_DAYS = 30

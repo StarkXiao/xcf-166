@@ -3,6 +3,7 @@ import { onMounted, computed } from 'vue'
 import { useMailStore } from '@/stores/mailStore'
 import { useCharacterStore } from '@/stores/characterStore'
 import MailCenter from '@/components/mail/MailCenter.vue'
+import AnnouncementEditor from '@/components/mail/AnnouncementEditor.vue'
 import {
   Mail,
   Bell,
@@ -54,6 +55,7 @@ function handleBatchClaimAll() {
             <ClaimAll class="w-5 h-5" />
             一键领取全部 ({{ mailStore.unclaimedAttachmentCount }})
           </button>
+          <AnnouncementEditor />
         </div>
 
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">

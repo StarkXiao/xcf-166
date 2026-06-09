@@ -13,6 +13,7 @@ import type {
 } from '@/types/dungeon'
 import { dungeons, getDungeonById, getStageById } from '@/game/data/dungeons'
 import { useGameStore } from './gameStore'
+import { useMailStore } from './mailStore'
 
 const STORAGE_KEY = 'dungeon_center_data'
 
@@ -346,6 +347,9 @@ export const useDungeonStore = defineStore('dungeon', () => {
     const sp = dp.stageProgresses.find((s) => s.stageId === record.stageId)
     if (!sp) return []
 
+    const mailStore = useMailStore()
+    const dungeon = getDungeonById(record.dungeonId)
+
     if (record.result === 'victory') {
       sp.clearCount++
       sp.todayClearCount++
@@ -354,10 +358,24 @@ export const useDungeonStore = defineStore('dungeon', () => {
 
       if (!sp.firstClearAt) {
         sp.firstClearAt = record.completedAt
-        const gameStore = useGameStore()
-        const dungeon = getDungeonById(record.dungeonId)
         if (dungeon) {
-          gameStore.addMoney(dungeon.firstClearBonus)
+          mailStore.sendRewardMail({
+            title: `首通奖励：${dungeon.name}`,
+            sender: '副本系统',
+            senderAvatar: '⚔️',
+            content: `恭喜你首次通关「${dungeon.name}」！首通奖励 ${dungeon.firstClearBonus} 金币已发放，请及时领取。`,
+            tag: '副本首通',
+            source: `dungeon_first_clear_${record.dungeonId}`,
+            attachments: [{
+              type: 'currency',
+              itemId: `dungeon_first_clear_${record.dungeonId}`,
+              name: '首通奖金',
+              icon: '🪙',
+              rarity: 'rare',
+              value: dungeon.firstClearBonus,
+              count: 1,
+            }],
+          })
         }
       }
 
@@ -390,7 +408,26 @@ export const useDungeonStore = defineStore('dungeon', () => {
 
     const rewards = record.result === 'victory' ? calculateDrops(record.stageId, record.starRating) : []
 
-    const dungeon = getDungeonById(record.dungeonId)
+    if (rewards.length > 0 && dungeon) {
+      mailStore.sendRewardMail({
+        title: `副本掉落：${dungeon.name}`,
+        sender: '副本系统',
+        senderAvatar: '⚔️',
+        content: `你在「${dungeon.name}」中获得了 ${rewards.length} 件战利品，请及时领取。${record.starRating === 3 ? '\n🌟 完美通关！掉落已获得1.5倍加成！' : ''}`,
+        tag: '副本掉落',
+        source: `dungeon_drop_${record.stageId}`,
+        attachments: rewards.map(r => ({
+          type: 'item' as const,
+          itemId: r.itemId,
+          name: r.itemName,
+          icon: r.itemIcon,
+          rarity: r.rarity as any,
+          value: r.quantity,
+          count: r.quantity,
+        })),
+      })
+    }
+
     if (dungeon) {
       const nextStages = dungeon.stages.filter(
         (s) => s.unlockConditions.some((c) => c.type === 'stage_cleared' && c.params.stageId === record.stageId)

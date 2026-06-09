@@ -149,6 +149,8 @@ export interface AchievementSaveData {
   totalSanityRecovered: number
   totalLevelUps: number
   totalExpGained: number
+  grantedBadges?: [string, { name: string; icon: string; rarity: AchievementRarity; grantedAt: number }][]
+  grantedTitles?: [string, { name: string; icon: string; grantedAt: number }][]
 }
 
 export const ACHIEVEMENT_STORAGE_KEY = 'achievement_system_data'

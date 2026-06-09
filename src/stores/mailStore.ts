@@ -3,19 +3,23 @@ import { ref, computed, watch } from 'vue'
 import type {
   Mail,
   MailCategory,
+  MailAttachment,
   MailStatistics,
-  MailSaveData
+  MailSaveData,
+  OperationalAnnouncement,
 } from '@/types/mail'
 import {
   MAIL_STORAGE_KEY,
   MAIL_STORAGE_VERSION,
   MAX_MAILS,
-  MAIL_EXPIRE_DAYS
+  MAIL_EXPIRE_DAYS,
 } from '@/types/mail'
-import { initialMails, operationalMessages } from '@/game/data/mailData'
+import { initialMails } from '@/game/data/mailData'
 import { useGameStore } from './gameStore'
 import { useSeasonStore } from './seasonStore'
 import { useCharacterStore } from './characterStore'
+import { useShopStore } from './shopStore'
+import { useAchievementStore } from './achievementStore'
 
 function generateId(prefix: string = 'mail'): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
@@ -33,7 +37,7 @@ function loadFromStorage(): MailSaveData | null {
   return null
 }
 
-function saveToStorage(data: MailSaveData) {
+function saveToStorageFn(data: MailSaveData) {
   try {
     localStorage.setItem(MAIL_STORAGE_KEY, JSON.stringify(data))
   } catch (e) {
@@ -46,6 +50,8 @@ export const useMailStore = defineStore('mail', () => {
   const mails = ref<Mail[]>([])
   const selectedMailId = ref<string | null>(null)
   const lastDeliveryCheck = ref(0)
+  const publishedAnnouncementIds = ref<Set<string>>(new Set())
+  const announcements = ref<OperationalAnnouncement[]>([])
 
   watch(
     [mails],
@@ -127,6 +133,7 @@ export const useMailStore = defineStore('mail', () => {
     if (saved && saved.mails && saved.mails.length > 0) {
       mails.value = saved.mails
       lastDeliveryCheck.value = saved.lastDeliveryCheck || 0
+      publishedAnnouncementIds.value = new Set(saved.publishedAnnouncementIds || [])
     } else {
       mails.value = initialMails.map(m => ({
         ...m,
@@ -136,31 +143,55 @@ export const useMailStore = defineStore('mail', () => {
     }
 
     checkExpiredAttachments()
-    deliverPendingOperationalMessages()
+    deliverQueuedAnnouncements()
     cleanExpiredMails()
   }
 
-  function deliverPendingOperationalMessages() {
+  function deliverQueuedAnnouncements() {
     const now = Date.now()
-    const since = lastDeliveryCheck.value
+    announcements.value.forEach(ann => {
+      if (ann.startsAt > now) return
+      if (ann.expiresAt < now) return
+      if (publishedAnnouncementIds.value.has(ann.id)) return
 
-    operationalMessages.forEach(template => {
-      if (template.createdAt > since) {
-        const exists = mails.value.some(m =>
-          m.title === template.title && m.sender === template.sender
-        )
-        if (!exists) {
-          const mail: Mail = {
-            ...template,
-            id: generateId('op'),
-            playerId: playerId.value
-          }
-          mails.value.unshift(mail)
-        }
-      }
+      const mailId = sendMail({
+        category: 'announcement',
+        priority: ann.priority,
+        title: ann.title,
+        sender: ann.sender,
+        senderAvatar: ann.senderAvatar,
+        content: ann.content,
+        attachments: ann.attachments.map(a => ({ ...a })),
+        tag: ann.tag,
+        actionLabel: ann.actionLabel,
+        actionUrl: ann.actionUrl,
+        expiresAt: ann.expiresAt,
+      })
+
+      publishedAnnouncementIds.value.add(ann.id)
     })
 
     lastDeliveryCheck.value = now
+  }
+
+  function announce(params: Omit<OperationalAnnouncement, 'id' | 'publishedAt'>): string {
+    const id = generateId('ann')
+    const announcement: OperationalAnnouncement = {
+      ...params,
+      id,
+      publishedAt: Date.now(),
+    }
+    announcements.value.push(announcement)
+
+    if (announcement.startsAt <= Date.now()) {
+      deliverQueuedAnnouncements()
+    }
+
+    return id
+  }
+
+  function removeAnnouncement(announcementId: string) {
+    announcements.value = announcements.value.filter(a => a.id !== announcementId)
   }
 
   function checkExpiredAttachments() {
@@ -198,9 +229,10 @@ export const useMailStore = defineStore('mail', () => {
       timestamp: Date.now(),
       playerId: playerId.value,
       mails: mails.value,
-      lastDeliveryCheck: lastDeliveryCheck.value
+      lastDeliveryCheck: lastDeliveryCheck.value,
+      publishedAnnouncementIds: Array.from(publishedAnnouncementIds.value),
     }
-    saveToStorage(data)
+    saveToStorageFn(data)
   }
 
   function markAsRead(mailId: string) {
@@ -267,16 +299,12 @@ export const useMailStore = defineStore('mail', () => {
     return deleted
   }
 
-  function claimAttachment(mailId: string, attachmentId: string): boolean {
-    const mail = mails.value.find(m => m.id === mailId)
-    if (!mail) return false
-
-    const attachment = mail.attachments.find(a => a.id === attachmentId)
-    if (!attachment || attachment.status !== 'unclaimed') return false
-
+  function applyAttachmentToPlayer(attachment: MailAttachment, sourceMailId: string) {
     const gameStore = useGameStore()
     const seasonStore = useSeasonStore()
     const characterStore = useCharacterStore()
+    const shopStore = useShopStore()
+    const achievementStore = useAchievementStore()
 
     switch (attachment.type) {
       case 'currency':
@@ -291,14 +319,35 @@ export const useMailStore = defineStore('mail', () => {
         break
       case 'season_exp':
         if (typeof attachment.value === 'number') {
-          seasonStore.addExp(attachment.value * attachment.count, 'mail_claim', mailId)
+          seasonStore.addExp(attachment.value * attachment.count, 'mail_claim', sourceMailId)
         }
         break
       case 'item':
+        if (attachment.itemId) {
+          shopStore.grantItemById(attachment.itemId, attachment.count)
+        }
+        break
       case 'badge':
+        if (attachment.itemId) {
+          achievementStore.grantBadge(attachment.itemId, attachment.name, attachment.icon, attachment.rarity)
+        }
+        break
       case 'title':
+        if (attachment.itemId) {
+          achievementStore.grantTitle(attachment.itemId, attachment.name, attachment.icon)
+        }
         break
     }
+  }
+
+  function claimAttachment(mailId: string, attachmentId: string): boolean {
+    const mail = mails.value.find(m => m.id === mailId)
+    if (!mail) return false
+
+    const attachment = mail.attachments.find(a => a.id === attachmentId)
+    if (!attachment || attachment.status !== 'unclaimed') return false
+
+    applyAttachmentToPlayer(attachment, mailId)
 
     attachment.status = 'claimed'
     attachment.claimedAt = Date.now()
@@ -384,10 +433,71 @@ export const useMailStore = defineStore('mail', () => {
     return mail.id
   }
 
+  function sendRewardMail(params: {
+    title: string
+    sender: string
+    senderAvatar: string
+    content: string
+    tag?: string
+    source: string
+    attachments: Array<Omit<MailAttachment, 'id' | 'status' | 'claimedAt'>>
+  }): string {
+    const attachments: MailAttachment[] = params.attachments.map(a => ({
+      ...a,
+      id: generateId('att'),
+      status: 'unclaimed' as const,
+      claimedAt: undefined,
+    }))
+
+    return sendMail({
+      category: 'reward',
+      priority: 'important',
+      title: params.title,
+      sender: params.sender,
+      senderAvatar: params.senderAvatar,
+      content: params.content,
+      attachments,
+      tag: params.tag,
+      expiresAt: Date.now() + 30 * 86400000,
+    })
+  }
+
+  function sendSystemMail(params: {
+    title: string
+    content: string
+    tag?: string
+    priority?: 'normal' | 'important' | 'urgent'
+    attachments?: Array<Omit<MailAttachment, 'id' | 'status' | 'claimedAt'>>
+    actionLabel?: string
+    actionUrl?: string
+  }): string {
+    const attachments: MailAttachment[] = (params.attachments || []).map(a => ({
+      ...a,
+      id: generateId('att'),
+      status: 'unclaimed' as const,
+      claimedAt: undefined,
+    }))
+
+    return sendMail({
+      category: 'system',
+      priority: params.priority || 'normal',
+      title: params.title,
+      sender: '系统管理员',
+      senderAvatar: '⚙️',
+      content: params.content,
+      attachments,
+      tag: params.tag,
+      actionLabel: params.actionLabel,
+      actionUrl: params.actionUrl,
+    })
+  }
+
   function clearAllData() {
     mails.value = []
     selectedMailId.value = null
     lastDeliveryCheck.value = 0
+    publishedAnnouncementIds.value.clear()
+    announcements.value = []
     localStorage.removeItem(MAIL_STORAGE_KEY)
   }
 
@@ -396,6 +506,8 @@ export const useMailStore = defineStore('mail', () => {
     mails,
     selectedMailId,
     lastDeliveryCheck,
+    publishedAnnouncementIds,
+    announcements,
     activeMails,
     unreadMails,
     starredMails,
@@ -419,6 +531,11 @@ export const useMailStore = defineStore('mail', () => {
     selectMail,
     getMailsByCategory,
     sendMail,
+    sendRewardMail,
+    sendSystemMail,
+    announce,
+    removeAnnouncement,
+    deliverQueuedAnnouncements,
     clearAllData,
     saveAllData
   }

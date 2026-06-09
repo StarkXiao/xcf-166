@@ -23,6 +23,7 @@ import { mutualTasks, mockPlayers, getFriendshipLevelFromExp, getExpForFriendshi
 import { useGameStore } from './gameStore'
 import { useSeasonStore } from './seasonStore'
 import { useCharacterStore } from './characterStore'
+import { useMailStore } from './mailStore'
 
 const STORAGE_VERSION = '1.0'
 
@@ -783,37 +784,42 @@ export const useFriendStore = defineStore('friend', () => {
     const task = availableMutualTasks.value.find(t => t.id === taskProgress.taskId)
     if (!task) return false
 
-    const gameStore = useGameStore()
-    const seasonStore = useSeasonStore()
-
     taskProgress.claimedAt = Date.now()
     taskProgress.status = 'claimed'
 
-    let expGained = 0
-    task.rewards.forEach(reward => {
-      switch (reward.type) {
-        case 'currency':
-          if (typeof reward.value === 'number') {
-            gameStore.addMoney(reward.value)
-          }
-          break
-        case 'exp':
-          if (typeof reward.value === 'number') {
-            expGained += reward.value
-            seasonStore.addExp(reward.value, 'mutual_task', task.id)
-          }
-          break
-        case 'buff':
-        case 'item':
-        case 'badge':
-        case 'title':
-          break
-      }
-    })
+    const mailStore = useMailStore()
+
+    if (task.rewards.length > 0) {
+      mailStore.sendRewardMail({
+        title: `互助奖励：${task.title}`,
+        sender: '好友系统',
+        senderAvatar: '🤝',
+        content: `你与好友完成了互助任务「${task.title}」，奖励已发放至邮箱，请及时领取。`,
+        tag: '互助',
+        source: `mutual_task_${task.id}`,
+        attachments: task.rewards.filter(r => !r.isShared || taskProgress.initiatorId === playerId.value).map(r => ({
+          type: r.type === 'exp' ? 'season_exp' as const : (r.type === 'buff' ? 'item' as const : r.type as any),
+          itemId: r.id,
+          name: r.name,
+          icon: r.icon,
+          rarity: r.rarity,
+          value: r.value,
+          count: 1,
+        })),
+      })
+    }
 
     const friend = friends.value.find(f =>
       f.friendId === (taskProgress.initiatorId === playerId.value ? taskProgress.helperId : taskProgress.initiatorId)
     )
+
+    const seasonStore = useSeasonStore()
+    let expGained = 0
+    task.rewards.forEach(r => {
+      if (r.type === 'exp' && typeof r.value === 'number') {
+        expGained += r.value
+      }
+    })
 
     if (friend && expGained > 0) {
       addFriendshipExp(friend.friendId, expGained)
@@ -822,7 +828,7 @@ export const useFriendStore = defineStore('friend', () => {
     addActivity({
       friendId: friend?.friendId || '',
       activityType: 'reward_claimed',
-      description: `领取了「${task.title}」的奖励`
+      description: `领取了「${task.title}」的奖励（已发至邮箱）`
     })
 
     saveAllData()
@@ -859,27 +865,27 @@ export const useFriendStore = defineStore('friend', () => {
           description: `与 ${friend.friendName} 的友谊达到 ${milestone.name} (Lv.${newLevel})`
         })
 
-        const gameStore = useGameStore()
-        const seasonStore = useSeasonStore()
+        const mailStore = useMailStore()
 
-        milestone.rewards.forEach(reward => {
-          switch (reward.type) {
-            case 'currency':
-              if (typeof reward.value === 'number') {
-                gameStore.addMoney(reward.value)
-              }
-              break
-            case 'exp':
-              if (typeof reward.value === 'number') {
-                seasonStore.addExp(reward.value, 'friendship_milestone', milestone.id)
-              }
-              break
-            case 'item':
-            case 'badge':
-            case 'title':
-              break
-          }
-        })
+        if (milestone.rewards.length > 0) {
+          mailStore.sendRewardMail({
+            title: `友谊里程碑：${milestone.name}`,
+            sender: '好友系统',
+            senderAvatar: '💝',
+            content: `你与 ${friend.friendName} 的友谊达到了 ${milestone.name} (Lv.${newLevel})！奖励已发放至邮箱。`,
+            tag: '友谊里程碑',
+            source: `friendship_milestone_${milestone.id}`,
+            attachments: milestone.rewards.map(r => ({
+              type: r.type === 'exp' ? 'season_exp' as const : r.type as any,
+              itemId: r.id,
+              name: r.name,
+              icon: r.icon,
+              rarity: r.rarity,
+              value: r.value,
+              count: 1,
+            })),
+          })
+        }
       }
     }
 
