@@ -134,6 +134,9 @@ export const useMailStore = defineStore('mail', () => {
       mails.value = saved.mails
       lastDeliveryCheck.value = saved.lastDeliveryCheck || 0
       publishedAnnouncementIds.value = new Set(saved.publishedAnnouncementIds || [])
+      if (saved.announcements && saved.announcements.length > 0) {
+        announcements.value = saved.announcements
+      }
     } else {
       mails.value = initialMails.map(m => ({
         ...m,
@@ -231,6 +234,7 @@ export const useMailStore = defineStore('mail', () => {
       mails: mails.value,
       lastDeliveryCheck: lastDeliveryCheck.value,
       publishedAnnouncementIds: Array.from(publishedAnnouncementIds.value),
+      announcements: announcements.value,
     }
     saveToStorageFn(data)
   }

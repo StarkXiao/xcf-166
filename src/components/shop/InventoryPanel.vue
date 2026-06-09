@@ -2,9 +2,9 @@
 import { ref, computed } from 'vue'
 import { useShopStore } from '../../stores/shopStore'
 import { useCharacterStore } from '../../stores/characterStore'
-import type { ShopItem } from '../../types/shop'
-import { rarityColors, rarityBgColors, categoryNames } from '../../game/data/shopItems'
-import { Backpack, Zap, Clock, CheckCircle, XCircle } from 'lucide-vue-next'
+import type { GameItemDef } from '../../types/shop'
+import { rarityColors, rarityBgColors } from '../../game/data/shopItems'
+import { Backpack, Zap, Clock, CheckCircle, XCircle, Coins, Sword } from 'lucide-vue-next'
 
 const shopStore = useShopStore()
 const characterStore = useCharacterStore()
@@ -27,7 +27,7 @@ const cosmeticItems = computed(() =>
 
 const useResult = ref<{ success: boolean; message: string } | null>(null)
 const isUsing = ref(false)
-const selectedItem = ref<ShopItem | null>(null)
+const sellingItemId = ref<string | null>(null)
 
 function formatDate(timestamp: number): string {
   const date = new Date(timestamp)
@@ -74,9 +74,46 @@ async function handleUseItem(itemId: string) {
   }, 2000)
 }
 
-function canUseItem(item: ShopItem): boolean {
-  if (item.category === 'material' || item.category === 'cosmetic') return false
-  return true
+async function handleSellItem(itemId: string) {
+  if (sellingItemId.value) return
+
+  sellingItemId.value = itemId
+  useResult.value = null
+
+  await new Promise(resolve => setTimeout(resolve, 200))
+
+  const result = shopStore.sellItem(itemId, 1)
+  useResult.value = {
+    success: result.success,
+    message: result.message
+  }
+
+  sellingItemId.value = null
+
+  setTimeout(() => {
+    useResult.value = null
+  }, 2000)
+}
+
+function canUseItem(item: GameItemDef): boolean {
+  if (item.category === 'cosmetic') return false
+  if (item.category === 'material') return false
+  return !!item.effect
+}
+
+function canSellItem(item: GameItemDef): boolean {
+  return item.category === 'material' && (item.sellValue ?? 0) > 0
+}
+
+function getSourceLabel(source?: string): string {
+  const labels: Record<string, string> = {
+    dungeon: '副本掉落',
+    shop: '商城购买',
+    achievement: '成就奖励',
+    event: '活动奖励',
+    mail: '邮件附件'
+  }
+  return source ? labels[source] || '' : ''
 }
 </script>
 
@@ -127,7 +164,7 @@ function canUseItem(item: ShopItem): boolean {
       <div v-if="inventoryItems.length === 0" class="p-12 text-center">
         <Backpack class="w-16 h-16 text-gray-600 mx-auto mb-4" />
         <p class="text-gray-500 text-lg">背包空空如也</p>
-        <p class="text-sm text-gray-600 mt-2">在商城购买道具后会存放在这里</p>
+        <p class="text-sm text-gray-600 mt-2">在商城购买道具或完成副本后，物品会存放在这里</p>
       </div>
 
       <div v-else class="divide-y divide-gray-700">
@@ -172,22 +209,48 @@ function canUseItem(item: ShopItem): boolean {
         </div>
 
         <div v-if="materialItems.length > 0">
-          <div class="px-4 py-2 bg-gray-800/50 text-sm text-gray-400">
-            材料 ({{ materialItems.length }})
+          <div class="px-4 py-2 bg-gray-800/50 text-sm text-gray-400 flex items-center gap-2">
+            <span>材料 ({{ materialItems.length }})</span>
           </div>
-          <div class="p-4 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          <div class="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             <div
               v-for="inv in materialItems"
               :key="inv.itemId"
-              class="rounded-lg border p-3 text-center"
+              class="rounded-lg border-2 p-3 transition-all hover:scale-[1.01]"
               :class="[
                 rarityColors[inv.item!.rarity],
                 rarityBgColors[inv.item!.rarity]
               ]"
             >
-              <div class="text-3xl mb-1">{{ inv.item!.icon }}</div>
-              <div class="text-xs font-medium text-white truncate">{{ inv.item!.name }}</div>
-              <div class="text-xs text-gray-400">x{{ inv.quantity }}</div>
+              <div class="flex items-start gap-3">
+                <div class="text-3xl flex-shrink-0">{{ inv.item!.icon }}</div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="font-medium text-white truncate">{{ inv.item!.name }}</span>
+                    <span class="px-1.5 py-0.5 bg-gray-700 rounded text-xs text-gray-300">x{{ inv.quantity }}</span>
+                  </div>
+                  <p class="text-xs text-gray-400 mt-1 line-clamp-2">{{ inv.item!.description }}</p>
+                  <div class="flex items-center gap-2 mt-1">
+                    <span v-if="inv.item!.sellValue" class="text-xs text-amber-400 flex items-center gap-0.5">
+                      <Coins class="w-3 h-3" />
+                      {{ inv.item!.sellValue }}/个
+                    </span>
+                    <span v-if="inv.item!.source" class="text-xs text-gray-500 flex items-center gap-0.5">
+                      <Sword v-if="inv.item!.source === 'dungeon'" class="w-3 h-3" />
+                      {{ getSourceLabel(inv.item!.source) }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button
+                v-if="canSellItem(inv.item!)"
+                @click="handleSellItem(inv.itemId)"
+                :disabled="sellingItemId === inv.itemId"
+                class="w-full mt-3 py-1.5 px-3 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm rounded-lg transition-colors flex items-center justify-center gap-1"
+              >
+                <Coins class="w-3 h-3" />
+                {{ sellingItemId === inv.itemId ? '出售中...' : '出售' }}
+              </button>
             </div>
           </div>
         </div>

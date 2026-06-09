@@ -94,6 +94,7 @@ export type BehaviorEventType =
   | 'reward_claimed'
   | 'shop_purchase'
   | 'item_used'
+  | 'item_sold'
   | 'custom'
 
 export interface BehaviorEvent {

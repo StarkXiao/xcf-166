@@ -92,6 +92,18 @@ export interface PurchaseResult {
   inventoryItem?: InventoryItem
 }
 
+export interface GameItemDef {
+  id: string
+  name: string
+  description: string
+  category: ItemCategory
+  rarity: ItemRarity
+  icon: string
+  effect?: ItemEffect
+  sellValue?: number
+  source?: 'shop' | 'dungeon' | 'achievement' | 'event' | 'mail'
+}
+
 export interface UseItemResult {
   success: boolean
   message: string

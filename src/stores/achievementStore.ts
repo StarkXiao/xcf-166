@@ -70,6 +70,7 @@ const conditionTypeMap: Record<BehaviorEventType, AchievementConditionType[]> = 
   reward_claimed: [],
   shop_purchase: [],
   item_used: [],
+  item_sold: [],
   custom: ['custom_event', 'relic_type_collect']
 }
 

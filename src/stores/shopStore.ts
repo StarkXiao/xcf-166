@@ -7,9 +7,11 @@ import type {
   InventoryItem,
   PurchaseResult,
   UseItemResult,
-  ItemCategory
+  ItemCategory,
+  GameItemDef
 } from '../types/shop'
 import { getInitialShopItems, getInitialDiscounts } from '../game/data/shopItems'
+import { getItemDef } from '../game/data/itemCatalog'
 import { useGameStore } from './gameStore'
 import { useCharacterStore } from './characterStore'
 import { useAchievementStore } from './achievementStore'
@@ -87,11 +89,15 @@ export const useShopStore = defineStore('shop', () => {
     return inventory.value
       .filter(inv => inv.quantity > 0)
       .map(inv => {
-        const item = items.value.find(i => i.id === inv.itemId)
-        return {
-          ...inv,
-          item
+        const shopItem = items.value.find(i => i.id === inv.itemId)
+        if (shopItem) {
+          return { ...inv, item: shopItem as GameItemDef }
         }
+        const catalogItem = getItemDef(inv.itemId)
+        if (catalogItem) {
+          return { ...inv, item: catalogItem }
+        }
+        return { ...inv, item: undefined as unknown as GameItemDef }
       })
       .filter(inv => inv.item)
   })
@@ -498,22 +504,45 @@ export const useShopStore = defineStore('shop', () => {
     return { success: false, message: '无法使用该物品' }
   }
 
+  function resolveItemDef(itemId: string): GameItemDef | undefined {
+    const shopItem = items.value.find(i => i.id === itemId)
+    if (shopItem) return shopItem as GameItemDef
+    return getItemDef(itemId)
+  }
+
   function useItem(itemId: string, quantity: number = 1): UseItemResult {
     const invItem = inventory.value.find(inv => inv.itemId === itemId)
     if (!invItem || invItem.quantity < quantity) {
       return { success: false, message: '物品数量不足' }
     }
 
-    const item = items.value.find(i => i.id === itemId)
+    const item = resolveItemDef(itemId)
     if (!item) {
       return { success: false, message: '物品不存在' }
     }
 
-    if (item.category === 'material' || item.category === 'cosmetic') {
+    if (item.category === 'material') {
+      const sv = item.sellValue ?? 0
+      if (sv > 0) {
+        return sellItem(itemId, quantity)
+      }
+      return { success: false, message: '该材料无法出售' }
+    }
+
+    if (item.category === 'cosmetic') {
+      return { success: false, message: '外观物品无法使用' }
+    }
+
+    if (!item.effect) {
       return { success: false, message: '该物品无法使用' }
     }
 
-    const result = applyItemEffect(item, quantity)
+    const shopItem = items.value.find(i => i.id === itemId)
+    if (!shopItem) {
+      return { success: false, message: '该物品无法使用' }
+    }
+
+    const result = applyItemEffect(shopItem, quantity)
     if (result.success) {
       invItem.quantity -= quantity
       if (invItem.quantity <= 0) {
@@ -529,6 +558,44 @@ export const useShopStore = defineStore('shop', () => {
     }
 
     return result
+  }
+
+  function sellItem(itemId: string, quantity: number = 1): UseItemResult {
+    const invItem = inventory.value.find(inv => inv.itemId === itemId)
+    if (!invItem || invItem.quantity < quantity) {
+      return { success: false, message: '物品数量不足' }
+    }
+
+    const item = resolveItemDef(itemId)
+    if (!item) {
+      return { success: false, message: '物品不存在' }
+    }
+
+    const sv = item.sellValue ?? 0
+    if (sv <= 0) {
+      return { success: false, message: '该物品无法出售' }
+    }
+
+    const totalGold = sv * quantity
+    gameStore.addMoney(totalGold)
+    invItem.quantity -= quantity
+    if (invItem.quantity <= 0) {
+      inventory.value = inventory.value.filter(inv => inv.itemId !== itemId)
+    }
+
+    achievementStore.trackBehavior('item_sold', {
+      itemId,
+      itemName: item.name,
+      quantity,
+      sellValue: sv,
+      totalGold
+    })
+
+    return {
+      success: true,
+      message: `出售 ${item.name} x${quantity}，获得 ${totalGold} 金币！`,
+      effect: { type: 'instant', target: 'money', value: totalGold }
+    }
   }
 
   function getItemPurchaseCount(itemId: string): number {
@@ -643,6 +710,8 @@ export const useShopStore = defineStore('shop', () => {
     validatePurchase,
     purchaseItem,
     useItem,
+    sellItem,
+    resolveItemDef,
     applyItemEffect,
     getItemPurchaseCount,
     hasItemInInventory,

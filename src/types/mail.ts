@@ -77,9 +77,10 @@ export interface MailSaveData {
   mails: Mail[]
   lastDeliveryCheck: number
   publishedAnnouncementIds: string[]
+  announcements?: OperationalAnnouncement[]
 }
 
 export const MAIL_STORAGE_KEY = 'mail_system_data'
-export const MAIL_STORAGE_VERSION = '1.1'
+export const MAIL_STORAGE_VERSION = '1.2'
 export const MAX_MAILS = 200
 export const MAIL_EXPIRE_DAYS = 30
