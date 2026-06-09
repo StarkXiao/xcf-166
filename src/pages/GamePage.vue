@@ -1,16 +1,18 @@
 <script setup lang="ts">
-import { onMounted, watch, ref } from 'vue'
+import { onMounted, onUnmounted, watch, ref } from 'vue'
 import { useGameStore } from '@/stores/gameStore'
 import { useOrderStore } from '@/stores/orderStore'
 import { useEventStore } from '@/stores/eventStore'
 import { useSeasonStore } from '@/stores/seasonStore'
 import { useCharacterStore } from '@/stores/characterStore'
 import { useTaskStore } from '@/stores/taskStore'
+import { useOfflineStore } from '@/stores/offlineStore'
 import { audioManager } from '@/game/audio'
 import StatusBar from '@/components/StatusBar.vue'
 import OrderPanel from '@/components/OrderPanel.vue'
 import Workbench from '@/components/Workbench.vue'
 import EventModal from '@/components/EventModal.vue'
+import OfflineEarningsDialog from '@/components/OfflineEarningsDialog.vue'
 import HomeSeasonCard from '@/components/season/HomeSeasonCard.vue'
 import HomeTaskCard from '@/components/task/HomeTaskCard.vue'
 import TaskReminder from '@/components/task/TaskReminder.vue'
@@ -21,9 +23,12 @@ const eventStore = useEventStore()
 const seasonStore = useSeasonStore()
 const characterStore = useCharacterStore()
 const taskStore = useTaskStore()
+const offlineStore = useOfflineStore()
 
 const showStartScreen = ref(true)
 const hasExistingSave = ref(false)
+
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 
 function handleNewGame() {
   audioManager.playClick()
@@ -33,11 +38,13 @@ function handleNewGame() {
   orderStore.clearAllOrders()
   eventStore.clearAllEvents()
   characterStore.resetCharacters()
+  offlineStore.resetOffline()
   gameStore.startGame()
   orderStore.generateNewOrders(1)
   eventStore.queueIntroEvents()
   characterStore.checkUnlockConditions()
   showStartScreen.value = false
+  startHeartbeat()
 }
 
 function handleContinue() {
@@ -62,6 +69,15 @@ function handleContinue() {
     })
     characterStore.checkUnlockConditions()
     showStartScreen.value = false
+    startHeartbeat()
+
+    offlineStore.loadFromStorage()
+    const earnings = offlineStore.checkOfflineEarnings()
+    if (earnings) {
+      setTimeout(() => {
+        offlineStore.showClaimDialog = true
+      }, 800)
+    }
   }
 }
 
@@ -79,7 +95,26 @@ onMounted(() => {
   hasExistingSave.value = gameStore.hasSave()
   seasonStore.initSeason()
   taskStore.initTaskCenter()
+  offlineStore.loadFromStorage()
 })
+
+onUnmounted(() => {
+  stopHeartbeat()
+})
+
+function startHeartbeat() {
+  stopHeartbeat()
+  heartbeatTimer = setInterval(() => {
+    offlineStore.updateLastOnlineTime()
+  }, 60000)
+}
+
+function stopHeartbeat() {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer)
+    heartbeatTimer = null
+  }
+}
 
 watch(() => gameStore.gameStarted, (started) => {
   if (started) {
@@ -197,6 +232,7 @@ const bgClass = () => {
     </template>
 
     <EventModal />
+    <OfflineEarningsDialog />
     <HomeSeasonCard />
     <HomeTaskCard />
     <TaskReminder />

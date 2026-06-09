@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useAchievementStore } from '@/stores/achievementStore'
 import { useSeasonStore } from '@/stores/seasonStore'
 import { useCharacterStore } from '@/stores/characterStore'
@@ -7,6 +7,7 @@ import { useTutorialStore } from '@/stores/tutorialStore'
 import { useGameStore } from '@/stores/gameStore'
 import { useFriendStore } from '@/stores/friendStore'
 import { useMailStore } from '@/stores/mailStore'
+import { useOfflineStore } from '@/stores/offlineStore'
 import AchievementUnlockPopup from '@/components/achievement/AchievementUnlockPopup.vue'
 import NotificationCenter from '@/components/achievement/NotificationCenter.vue'
 import FriendNotificationCenter from '@/components/friend/FriendNotificationCenter.vue'
@@ -22,6 +23,7 @@ const tutorialStore = useTutorialStore()
 const gameStore = useGameStore()
 const friendStore = useFriendStore()
 const mailStore = useMailStore()
+const offlineStore = useOfflineStore()
 const router = useRouter()
 const route = useRoute()
 
@@ -44,7 +46,19 @@ onMounted(() => {
       tutorialStore.startTutorial()
     }, 500)
   }
+
+  window.addEventListener('beforeunload', handleBeforeUnload)
 })
+
+onUnmounted(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+})
+
+function handleBeforeUnload() {
+  if (gameStore.gameStarted && !gameStore.gameOver) {
+    offlineStore.updateLastOnlineTime()
+  }
+}
 
 function restartTutorial() {
   tutorialStore.resetTutorial()

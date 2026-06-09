@@ -9,6 +9,7 @@ import { useAchievementStore } from './achievementStore'
 import { useShopStore } from './shopStore'
 import { useFriendStore } from './friendStore'
 import { useTaskStore } from './taskStore'
+import { useOfflineStore } from './offlineStore'
 
 const SAVE_KEY = 'b2_morgue_save'
 const SAVE_VERSION = '2.2.0'
@@ -180,9 +181,12 @@ export const useGameStore = defineStore('game', () => {
     const eventStore = useEventStore()
     const characterStore = useCharacterStore()
     const shopStore = useShopStore()
+    const offlineStore = useOfflineStore()
 
     const characterData = characterStore.getSaveData()
     const shopData = shopStore.getShopSaveData()
+
+    offlineStore.updateLastOnlineTime()
 
     const saveData: SaveData = {
       stats: { ...stats.value },
@@ -251,6 +255,8 @@ export const useGameStore = defineStore('game', () => {
     characterStore.resetCharacters()
     const shopStore = useShopStore()
     shopStore.resetShop()
+    const offlineStore = useOfflineStore()
+    offlineStore.resetOffline()
   }
 
   return {
