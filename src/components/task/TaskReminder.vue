@@ -34,7 +34,12 @@ function toggleExpand() {
 
 function handleReminderClick(reminderId: string, taskType: string) {
   taskStore.markReminderRead(reminderId)
-  router.push({ path: '/season', query: { tab: taskType === 'weekly' ? 'weekly_tasks' : 'growth_tasks' } })
+  const tabMap: Record<string, string> = {
+    weekly: 'weekly_tasks',
+    growth: 'growth_tasks',
+    pool: 'reward_pool',
+  }
+  router.push({ path: '/season', query: { tab: tabMap[taskType] || 'weekly_tasks' } })
   isExpanded.value = false
 }
 
@@ -90,7 +95,7 @@ function handleMarkAllRead() {
               <div class="flex-1 min-w-0">
                 <p class="text-sm text-white leading-snug">{{ reminder.message }}</p>
                 <p class="text-xs text-gray-500 mt-1">
-                  {{ reminder.taskType === 'weekly' ? '周常任务' : '成长任务' }}
+                  {{ reminder.taskType === 'weekly' ? '周常任务' : reminder.taskType === 'growth' ? '成长任务' : '奖励池' }}
                   · {{ new Date(reminder.createdAt).toLocaleTimeString() }}
                 </p>
               </div>

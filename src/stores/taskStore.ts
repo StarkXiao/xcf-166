@@ -491,7 +491,7 @@ export const useTaskStore = defineStore('task', () => {
     return growthProgressMap.value.get(taskId)
   }
 
-  function addReminder(taskId: string, taskType: 'weekly' | 'growth', message: string, triggerCondition: TaskReminder['triggerCondition']) {
+  function addReminder(taskId: string, taskType: 'weekly' | 'growth' | 'pool', message: string, triggerCondition: TaskReminder['triggerCondition']) {
     const existing = reminders.value.find(r => r.taskId === taskId && r.triggerCondition === triggerCondition && !r.read)
     if (existing) return
 
@@ -553,7 +553,7 @@ export const useTaskStore = defineStore('task', () => {
     if (nextTier) {
       const remaining = nextTier.threshold - rewardPoolProgress.value.points
       if (remaining <= 30) {
-        addReminder('pool', 'weekly', `奖励池距离下一档仅差 ${remaining} 点，完成更多任务即可解锁！`, 'almost_complete')
+        addReminder('pool', 'pool', `奖励池距离下一档仅差 ${remaining} 点，完成更多任务即可解锁！`, 'almost_complete')
       }
     }
   }

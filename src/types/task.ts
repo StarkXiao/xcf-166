@@ -99,7 +99,7 @@ export interface MergedProgressRecord {
 export interface TaskReminder {
   id: string
   taskId: string
-  taskType: 'weekly' | 'growth'
+  taskType: 'weekly' | 'growth' | 'pool'
   message: string
   triggerCondition: 'almost_complete' | 'new_available' | 'expiring_soon' | 'reward_available'
   read: boolean
