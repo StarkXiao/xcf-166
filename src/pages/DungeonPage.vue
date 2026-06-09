@@ -21,6 +21,7 @@ const activeTab = ref<'list' | 'stats'>('list')
 const viewMode = ref<ViewMode>('list')
 const selectedDungeonId = ref<string | null>(null)
 const selectedStageId = ref<string | null>(null)
+const isRetrying = ref(false)
 const lastBattleRecord = ref<BattleRecord | null>(null)
 const lastBattleRewards = ref<BattleReward[]>([])
 
@@ -53,12 +54,14 @@ function handleSelectStage(dungeonId: string, stageId: string) {
   if (!check.canChallenge) return
   selectedDungeonId.value = dungeonId
   selectedStageId.value = stageId
+  isRetrying.value = false
   viewMode.value = 'battle'
 }
 
 function handleBattleComplete(record: BattleRecord, rewards: BattleReward[]) {
   lastBattleRecord.value = record
   lastBattleRewards.value = rewards
+  isRetrying.value = false
   viewMode.value = 'result'
 }
 
@@ -73,6 +76,7 @@ function handleRetry() {
   if (!selectedDungeonId.value || !selectedStageId.value) return
   const ok = dungeonStore.retryChallenge(selectedDungeonId.value, selectedStageId.value)
   if (!ok) return
+  isRetrying.value = true
   viewMode.value = 'battle'
 }
 
@@ -178,6 +182,7 @@ function goBack() {
           <BattleArena
             :dungeon-id="selectedDungeonId"
             :stage-id="selectedStageId"
+            :auto-start="isRetrying"
             @battle-complete="handleBattleComplete"
             @retreat="handleRetreat"
           />

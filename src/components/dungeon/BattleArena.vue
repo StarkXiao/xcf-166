@@ -9,6 +9,7 @@ import type { BattleRecord, BattleReward, BattleEvent, DropRarity } from '@/type
 const props = defineProps({
   dungeonId: { type: String, required: true },
   stageId: { type: String, required: true },
+  autoStart: { type: Boolean, default: false },
 })
 
 const emit = defineEmits<{
@@ -168,6 +169,9 @@ function finishBattle() {
 
 onMounted(() => {
   enemyHpStates.value = []
+  if (props.autoStart) {
+    nextTick(() => startBattle())
+  }
 })
 
 onUnmounted(() => {
