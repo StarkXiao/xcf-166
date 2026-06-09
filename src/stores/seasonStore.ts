@@ -22,6 +22,7 @@ import {
   rankRewardTiers,
 } from '@/game/data/seasonRewards'
 import { useActivityStore } from '@/stores/activityStore'
+import { useTaskStore } from '@/stores/taskStore'
 
 const SEASON_ACTIVITY_ID = 'act_001'
 
@@ -586,6 +587,14 @@ export const useSeasonStore = defineStore('season', () => {
           taskType: task?.type,
           expReward: task?.expReward,
         })
+      })
+
+      const taskStore = useTaskStore()
+      completedTasks.forEach((taskId) => {
+        const task = tasks.value.find((t) => t.id === taskId)
+        if (task) {
+          taskStore.mergeProgressFromSeason(conditionType, amount, taskId)
+        }
       })
     }
 

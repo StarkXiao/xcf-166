@@ -8,6 +8,7 @@ import { useCharacterStore } from './characterStore'
 import { useAchievementStore } from './achievementStore'
 import { useShopStore } from './shopStore'
 import { useFriendStore } from './friendStore'
+import { useTaskStore } from './taskStore'
 
 const SAVE_KEY = 'b2_morgue_save'
 const SAVE_VERSION = '2.2.0'
@@ -75,6 +76,8 @@ export const useGameStore = defineStore('game', () => {
       seasonStore.updateTaskProgress('money_earn', amount)
       const achievementStore = useAchievementStore()
       achievementStore.trackBehavior('money_earned', { amount, previous, current: stats.value.money })
+      const taskStore = useTaskStore()
+      taskStore.onGameEvent('money_earn', amount)
     }
   }
 
@@ -88,6 +91,8 @@ export const useGameStore = defineStore('game', () => {
       achievementStore.trackBehavior('reputation_gained', { amount, previous, current: stats.value.reputation })
       const friendStore = useFriendStore()
       friendStore.onGameBehavior('reputation_gained', amount)
+      const taskStore = useTaskStore()
+      taskStore.onGameEvent('reputation_gain', amount)
     }
   }
 
@@ -130,6 +135,8 @@ export const useGameStore = defineStore('game', () => {
       seasonStore.updateTaskProgress('day_pass', 1)
       const achievementStore = useAchievementStore()
       achievementStore.trackBehavior('day_passed', { day: day.value, totalDays: day.value })
+      const taskStore = useTaskStore()
+      taskStore.onGameEvent('day_pass', 1)
     }
   }
 
@@ -144,6 +151,10 @@ export const useGameStore = defineStore('game', () => {
     const seasonStore = useSeasonStore()
     seasonStore.updateTaskProgress('order_complete', 1)
     seasonStore.updateTaskProgress('relic_purify', 1)
+
+    const taskStore = useTaskStore()
+    taskStore.onGameEvent('order_complete', 1)
+    taskStore.onGameEvent('relic_purify', 1)
 
     const achievementStore = useAchievementStore()
     achievementStore.trackBehavior('order_completed', {

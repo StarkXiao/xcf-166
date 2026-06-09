@@ -17,6 +17,9 @@ import { growthTasks, getGrowthTaskById } from '@/game/data/growthTasks'
 import { rewardPoolTiers, getNextTier } from '@/game/data/rewardPool'
 import { useSeasonStore } from './seasonStore'
 import { useFriendStore } from './friendStore'
+import { useGameStore } from './gameStore'
+import { useShopStore } from './shopStore'
+import { useAchievementStore } from './achievementStore'
 
 const STORAGE_KEY = 'task_center_data'
 const STORAGE_VERSION = '1.0'
@@ -432,14 +435,37 @@ export const useTaskStore = defineStore('task', () => {
 
     rewardPoolProgress.value.claimedTiers.push(tierId)
 
+    const gameStore = useGameStore()
+    const shopStore = useShopStore()
+    const achievementStore = useAchievementStore()
     const seasonStore = useSeasonStore()
-    if (seasonStore.isSeasonActive) {
-      tier.rewards.forEach(reward => {
-        if (reward.type === 'exp' && typeof reward.value === 'number') {
-          seasonStore.addExp(reward.value, 'reward_pool', tierId)
-        }
-      })
-    }
+
+    tier.rewards.forEach(reward => {
+      switch (reward.type) {
+        case 'currency':
+          if (typeof reward.value === 'number') {
+            gameStore.addMoney(reward.value)
+          }
+          break
+        case 'item':
+          shopStore.grantItemById(String(reward.value))
+          break
+        case 'badge':
+          achievementStore.grantBadge(reward.id, reward.name, reward.icon, reward.rarity)
+          break
+        case 'title':
+          achievementStore.grantTitle(reward.id, reward.name, reward.icon)
+          break
+        case 'cosmetic':
+          shopStore.grantItemById(String(reward.value))
+          break
+        case 'exp':
+          if (typeof reward.value === 'number' && seasonStore.isSeasonActive) {
+            seasonStore.addExp(reward.value, 'reward_pool', tierId)
+          }
+          break
+      }
+    })
 
     saveToStorage()
     return true

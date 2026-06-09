@@ -24,6 +24,7 @@ import { useGameStore } from './gameStore'
 import { useSeasonStore } from './seasonStore'
 import { useCharacterStore } from './characterStore'
 import { useMailStore } from './mailStore'
+import { useTaskStore } from './taskStore'
 
 const STORAGE_VERSION = '1.0'
 
@@ -703,6 +704,9 @@ export const useFriendStore = defineStore('friend', () => {
       data: { taskProgressId: taskProgress.id, taskId: task.id }
     })
 
+    const taskStore = useTaskStore()
+    taskStore.onGameEvent('mutual_task_complete', 1)
+
     saveAllData()
     return true
   }
@@ -711,6 +715,8 @@ export const useFriendStore = defineStore('friend', () => {
     const inProgressTasks = mutualTaskProgresses.value.filter(t =>
       t.status === 'in_progress'
     )
+
+    const taskStore = useTaskStore()
 
     inProgressTasks.forEach(taskProgress => {
       const task = getMutualTaskById(taskProgress.taskId)
@@ -737,6 +743,8 @@ export const useFriendStore = defineStore('friend', () => {
           })
         }
       }
+
+      taskStore.mergeProgressFromMutual(behaviorType, value, taskProgress.id)
 
       saveAllData()
     })
@@ -769,6 +777,9 @@ export const useFriendStore = defineStore('friend', () => {
       activityType: 'money_gifted',
       description: `向 ${taskProgress.initiatorName} 赠送了 ${amount} 金币，完成「${task.title}」互助`
     })
+
+    const taskStore = useTaskStore()
+    taskStore.mergeProgressFromMutual('money_gifted', amount, taskProgress.id)
 
     completeMutualTask(taskProgress.id)
 
