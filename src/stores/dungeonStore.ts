@@ -84,7 +84,7 @@ export const useDungeonStore = defineStore('dungeon', () => {
     switch (condition.type) {
       case 'stage_cleared': {
         const sp = getStageProgress(condition.params.stageId)
-        return sp !== undefined && sp.status === 'cleared' || sp !== undefined && sp.status === 'perfect'
+        return sp !== undefined && (sp.status === 'cleared' || sp.status === 'perfect')
       }
       case 'dungeon_cleared': {
         const dp = getDungeonProgress(condition.params.dungeonId)
@@ -181,9 +181,9 @@ export const useDungeonStore = defineStore('dungeon', () => {
     if (!isStageUnlocked(dungeonId, stageId)) return { canChallenge: false, reason: '关卡未解锁' }
 
     const dp = getDungeonProgress(dungeonId)
-    if (dp && dp.todayClearCount >= dungeon.dailyResetLimit) {
+    if (dp) {
       const sp = dp.stageProgresses.find((s) => s.stageId === stageId)
-      if (sp && sp.clearCount > 0) {
+      if (sp && sp.todayClearCount >= dungeon.dailyResetLimit) {
         return { canChallenge: false, reason: `今日挑战次数已达上限(${dungeon.dailyResetLimit}次)` }
       }
     }
@@ -293,7 +293,7 @@ export const useDungeonStore = defineStore('dungeon', () => {
       totalDamageDealt,
       totalDamageTaken,
       turnsElapsed: turn,
-      duration: turn * 5,
+      duration: turn * 5 * 1000,
       completedAt: Date.now(),
     }
   }
@@ -512,7 +512,8 @@ export const useDungeonStore = defineStore('dungeon', () => {
   }
 
   function retryChallenge(dungeonId: string, stageId: string): boolean {
-    return startBattle(dungeonId, stageId)
+    const check = canChallengeStage(dungeonId, stageId)
+    return check.canChallenge
   }
 
   function getRecentBattles(limit: number = 10): BattleRecord[] {

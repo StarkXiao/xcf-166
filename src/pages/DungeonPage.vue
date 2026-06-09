@@ -49,6 +49,8 @@ function handleSelectDungeon(dungeonId: string) {
 }
 
 function handleSelectStage(dungeonId: string, stageId: string) {
+  const check = dungeonStore.canChallengeStage(dungeonId, stageId)
+  if (!check.canChallenge) return
   selectedDungeonId.value = dungeonId
   selectedStageId.value = stageId
   viewMode.value = 'battle'
@@ -61,13 +63,17 @@ function handleBattleComplete(record: BattleRecord, rewards: BattleReward[]) {
 }
 
 function handleRetreat() {
-  viewMode.value = 'stages'
+  if (dungeonStore.isBattleInProgress) {
+    dungeonStore.retreatBattle()
+  }
+  viewMode.value = selectedDungeonId.value ? 'stages' : 'list'
 }
 
 function handleRetry() {
-  if (selectedDungeonId.value && selectedStageId.value) {
-    viewMode.value = 'battle'
-  }
+  if (!selectedDungeonId.value || !selectedStageId.value) return
+  const ok = dungeonStore.retryChallenge(selectedDungeonId.value, selectedStageId.value)
+  if (!ok) return
+  viewMode.value = 'battle'
 }
 
 function handleContinue() {

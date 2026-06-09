@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, nextTick, watch } from 'vue'
+import { computed, ref, nextTick, onMounted, onUnmounted } from 'vue'
 import { Swords, Heart, Shield, Zap, Clock, ArrowLeft, X, Star } from 'lucide-vue-next'
 import { getStageById } from '@/game/data/dungeons'
 import { useDungeonStore } from '@/stores/dungeonStore'
@@ -27,6 +27,7 @@ const battleRecord = ref<BattleRecord | null>(null)
 const battleRewards = ref<BattleReward[]>([])
 const visibleEvents = ref<BattleEvent[]>([])
 const logContainer = ref<HTMLElement | null>(null)
+const startError = ref<string | null>(null)
 
 const playerMaxHp = computed(() => gameStore.stats.maxSanity)
 const playerCurrentHp = ref(gameStore.stats.sanity)
@@ -53,8 +54,6 @@ const displayEnemies = computed<EnemyHpState[]>(() => {
     maxHp: e.hp,
   }))
 })
-
-watch(stage, () => { enemyHpStates.value = [] }, { immediate: true })
 
 const rarityColors: Record<DropRarity, string> = {
   common: 'text-gray-300 bg-gray-500/20 border-gray-500/30',
@@ -90,7 +89,14 @@ function initEnemyStates() {
 }
 
 function startBattle() {
-  if (!stage.value) return
+  startError.value = null
+
+  const ok = dungeonStore.startBattle(props.dungeonId, props.stageId)
+  if (!ok) {
+    const check = dungeonStore.canChallengeStage(props.dungeonId, props.stageId)
+    startError.value = check.reason || '无法发起挑战'
+    return
+  }
 
   initEnemyStates()
   playerCurrentHp.value = gameStore.stats.sanity
@@ -101,6 +107,21 @@ function startBattle() {
   battleRecord.value = record
 
   revealEvents(record.events, 0)
+}
+
+function handleRetreat() {
+  if (battlePhase.value === 'simulating') {
+    if (dungeonStore.isBattleInProgress) {
+      dungeonStore.retreatBattle()
+    }
+    battlePhase.value = 'idle'
+    emit('retreat')
+    return
+  }
+  if (dungeonStore.isBattleInProgress) {
+    dungeonStore.retreatBattle()
+  }
+  emit('retreat')
 }
 
 function revealEvents(events: BattleEvent[], index: number) {
@@ -144,6 +165,16 @@ function finishBattle() {
   battlePhase.value = 'complete'
   emit('battle-complete', battleRecord.value, rewards)
 }
+
+onMounted(() => {
+  enemyHpStates.value = []
+})
+
+onUnmounted(() => {
+  if (dungeonStore.isBattleInProgress) {
+    dungeonStore.retreatBattle()
+  }
+})
 </script>
 
 <template>
@@ -151,7 +182,7 @@ function finishBattle() {
     <div class="flex items-center justify-between p-4 border-b border-gray-800 bg-gray-900/80">
       <div class="flex items-center gap-3">
         <button
-          @click="emit('retreat')"
+          @click="handleRetreat"
           class="p-2 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-white transition-all"
           :disabled="battlePhase === 'simulating'"
         >
@@ -172,12 +203,16 @@ function finishBattle() {
         </div>
       </div>
       <button
-        @click="emit('retreat')"
+        @click="handleRetreat"
         class="p-2 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-white transition-all"
         :disabled="battlePhase === 'simulating'"
       >
         <X :size="20" />
       </button>
+    </div>
+
+    <div v-if="startError" class="mx-4 mt-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm text-center">
+      {{ startError }}
     </div>
 
     <div class="flex-1 flex flex-col p-4 gap-4 overflow-hidden">
