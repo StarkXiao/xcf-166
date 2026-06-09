@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head><title>Offline Earnings - Log Reader</title></head>
+<body style="background:#111;color:#eee;font-family:monospace;padding:20px;">
+<h2>离线收益日志读取</h2>
+<div id="output"></div>
+<script>
+const output = document.getElementById('output')
+
+const offlineRaw = localStorage.getItem('offline_earnings_data')
+const saveRaw = localStorage.getItem('b2_morgue_save')
+
+let html = '<h3 style="color:#0f0">offline_earnings_data:</h3>'
+if (offlineRaw) {
+  const data = JSON.parse(offlineRaw)
+  html += '<pre style="background:#222;padding:10px;border-radius:4px;overflow-x:auto;white-space:pre-wrap;">'
+  html += 'lastOnlineTime: ' + new Date(data.lastOnlineTime).toLocaleString() + '\n'
+  html += 'logs count: ' + (data.logs ? data.logs.length : 0) + '\n\n'
+  if (data.logs && data.logs.length > 0) {
+    data.logs.forEach(function(log, i) {
+      html += '--- Log #' + (i + 1) + ' ---\n'
+      html += '  id: ' + log.id + '\n'
+      html += '  claimedAt: ' + new Date(log.claimedAt).toLocaleString() + '\n'
+      html += '  offlineMinutes: ' + log.offlineMinutes + '\n'
+      html += '  effectiveMinutes: ' + log.effectiveMinutes + '\n'
+      html += '  timeCapped: ' + log.timeCapped + '\n'
+      html += '  earnings: 金钱=' + log.earnings.money + ', 声望=' + log.earnings.reputation + ', 理智=' + log.earnings.sanity + '\n'
+      html += '  rawEarnings: 金钱=' + (log.rawEarnings ? log.rawEarnings.money : 'N/A') + ', 声望=' + (log.rawEarnings ? log.rawEarnings.reputation : 'N/A') + ', 理智=' + (log.rawEarnings ? log.rawEarnings.sanity : 'N/A') + '\n'
+      if (log.capInfo) {
+        html += '  capInfo:\n'
+        html += '    moneyCapped=' + log.capInfo.moneyCapped + ' [上限 ' + log.capInfo.moneyCapValue + ']\n'
+        html += '    reputationCapped=' + log.capInfo.reputationCapped + ' [上限 ' + log.capInfo.reputationCapValue + ']\n'
+        html += '    sanityCapped=' + log.capInfo.sanityCapped + ' [上限 ' + log.capInfo.sanityCapValue + ']\n'
+      }
+      html += '\n'
+    })
+  } else {
+    html += '(no logs)\n'
+  }
+  html += '</pre>'
+} else {
+  html += '<p style="color:red">No offline_earnings_data found</p>'
+}
+
+html += '<h3 style="color:#0f0">b2_morgue_save (stats):</h3>'
+if (saveRaw) {
+  const data = JSON.parse(saveRaw)
+  html += '<pre style="background:#222;padding:10px;border-radius:4px;">'
+  html += 'money: ' + data.stats.money + '\n'
+  html += 'reputation: ' + data.stats.reputation + '\n'
+  html += 'sanity: ' + data.stats.sanity + '/' + data.stats.maxSanity + '\n'
+  html += 'day: ' + data.stats.day + '\n'
+  html += '</pre>'
+} else {
+  html += '<p style="color:red">No save found</p>'
+}
+
+output.innerHTML = html
+</script>
+</body>
+</html>

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head><title>Offline Earnings Test Harness</title></head>
+<body style="background:#111;color:#eee;font-family:monospace;padding:20px;">
+<h2>离线收益实跑验证工具</h2>
+<p>此页面用于注入 localStorage 数据后跳转游戏，模拟离线收益场景。</p>
+<script>
+const params = new URLSearchParams(window.location.search)
+const offlineMinutes = parseInt(params.get('offlineMinutes') || '0')
+const day = parseInt(params.get('day') || '10')
+const reputation = parseInt(params.get('reputation') || '50')
+const money = parseInt(params.get('money') || '2000')
+const sanity = parseInt(params.get('sanity') || '80')
+
+if (offlineMinutes > 0) {
+  const lastOnlineTime = Date.now() - offlineMinutes * 60 * 1000
+
+  const offlineData = { lastOnlineTime, logs: [] }
+  localStorage.setItem('offline_earnings_data', JSON.stringify(offlineData))
+
+  const gameSave = {
+    stats: {
+      money,
+      reputation,
+      sanity,
+      maxSanity: 100,
+      day,
+      totalOrdersCompleted: 20,
+      totalRelicsProcessed: 30
+    },
+    timePhase: 'day',
+    day,
+    isProcessing: false,
+    currentProcessingStep: null,
+    processingProgress: 0,
+    pendingOrders: [],
+    acceptedOrders: [],
+    currentOrderId: null,
+    eventQueue: [],
+    currentEvent: null,
+    eventHistory: [
+      { id: 'intro_1', type: 'story', title: '开篇', description: '欢迎来到地下二层', resolved: true, choices: [] }
+    ],
+    eventResultMessage: null,
+    characterData: null,
+    shopData: null,
+    timestamp: Date.now(),
+    version: '2.3.0'
+  }
+  localStorage.setItem('b2_morgue_save', JSON.stringify(gameSave))
+
+  const tutorialData = {
+    version: '1.0.0',
+    characterId: 'player_local',
+    isCompleted: true,
+    currentPhase: null,
+    currentStepIndex: 0,
+    completedPhases: ['welcome', 'order', 'process', 'event', 'shop'],
+    completedSteps: [],
+    skipped: true,
+    startedAt: Date.now() - 86400000,
+    completedAt: Date.now() - 86400000 + 300000,
+    analytics: {
+      firstLogin: false,
+      tutorialStartTime: Date.now() - 86400000,
+      tutorialCompleteTime: Date.now() - 86400000 + 300000,
+      phaseTimings: {},
+      stepRetries: {},
+      skipCount: 0
+    },
+    rewards: []
+  }
+  localStorage.setItem('b2_tutorial_player_local', JSON.stringify(tutorialData))
+
+  document.body.innerHTML += '<p style="color:#0f0">✅ 已注入：</p>' +
+    '<ul>' +
+    '<li>lastOnlineTime = ' + new Date(lastOnlineTime).toLocaleString() + ' (离线 ' + offlineMinutes + ' 分钟)</li>' +
+    '<li>day=' + day + ', reputation=' + reputation + ', money=' + money + ', sanity=' + sanity + '</li>' +
+    '<li>tutorial: 已完成（跳过引导弹窗）</li>' +
+    '</ul>' +
+    '<p>3 秒后跳转游戏...</p>'
+
+  setTimeout(function() { window.location.href = '/' }, 3000)
+} else {
+  document.body.innerHTML += '<p style="color:red">需要 offlineMinutes 参数，例如: /test-offline.html?offlineMinutes=30&day=10&reputation=50</p>'
+}
+</script>
+</body>
+</html>
