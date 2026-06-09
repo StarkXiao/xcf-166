@@ -2,18 +2,23 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSeasonStore } from '@/stores/seasonStore'
+import { useTaskStore } from '@/stores/taskStore'
 import { useActivityStore } from '@/stores/activityStore'
 import { useCharacterStore } from '@/stores/characterStore'
-import { Trophy, ListTodo, TrendingUp, Gift, ArrowLeft } from 'lucide-vue-next'
+import { Trophy, ListTodo, TrendingUp, Gift, ArrowLeft, Calendar, Target, Star } from 'lucide-vue-next'
 import SeasonCenter from '@/components/season/SeasonCenter.vue'
 import TaskList from '@/components/season/TaskList.vue'
 import ProgressTracker from '@/components/season/ProgressTracker.vue'
 import Leaderboard from '@/components/season/Leaderboard.vue'
 import RewardCenter from '@/components/season/RewardCenter.vue'
+import WeeklyTaskPanel from '@/components/task/WeeklyTaskPanel.vue'
+import GrowthTaskPanel from '@/components/task/GrowthTaskPanel.vue'
+import RewardPoolPanel from '@/components/task/RewardPoolPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
 const seasonStore = useSeasonStore()
+const taskStore = useTaskStore()
 const activityStore = useActivityStore()
 const characterStore = useCharacterStore()
 
@@ -21,8 +26,11 @@ const activeTab = ref('center')
 
 const tabs = [
   { id: 'center', label: '赛季中心', icon: Trophy },
-  { id: 'tasks', label: '任务列表', icon: ListTodo },
-  { id: 'progress', label: '进度追踪', icon: TrendingUp },
+  { id: 'tasks', label: '赛季任务', icon: ListTodo },
+  { id: 'weekly_tasks', label: '周常任务', icon: Calendar },
+  { id: 'growth_tasks', label: '成长任务', icon: TrendingUp },
+  { id: 'reward_pool', label: '奖励池', icon: Star },
+  { id: 'progress', label: '进度追踪', icon: Target },
   { id: 'rewards', label: '奖励中心', icon: Gift },
   { id: 'leaderboard', label: '排行榜', icon: Trophy },
 ]
@@ -35,6 +43,7 @@ function getPlayerId(): string {
 
 onMounted(() => {
   seasonStore.initSeason(getPlayerId())
+  taskStore.initTaskCenter()
   const tab = route.query.tab as string
   if (tab && tabs.some((t) => t.id === tab)) {
     activeTab.value = tab
@@ -145,6 +154,24 @@ function goBack() {
             >
               {{ seasonStore.unclaimedCount }}
             </span>
+            <span
+              v-if="tab.id === 'weekly_tasks' && taskStore.unclaimedWeeklyCount > 0"
+              class="season-red-dot"
+            >
+              {{ taskStore.unclaimedWeeklyCount }}
+            </span>
+            <span
+              v-if="tab.id === 'growth_tasks' && taskStore.unclaimedGrowthCount > 0"
+              class="season-red-dot"
+            >
+              {{ taskStore.unclaimedGrowthCount }}
+            </span>
+            <span
+              v-if="tab.id === 'reward_pool' && taskStore.unclaimedPoolTierCount > 0"
+              class="season-red-dot"
+            >
+              {{ taskStore.unclaimedPoolTierCount }}
+            </span>
           </button>
         </nav>
       </div>
@@ -153,6 +180,9 @@ function goBack() {
         <Transition name="fade-slide" mode="out-in">
           <SeasonCenter v-if="activeTab === 'center'" :key="'center'" />
           <TaskList v-else-if="activeTab === 'tasks'" :key="'tasks'" />
+          <WeeklyTaskPanel v-else-if="activeTab === 'weekly_tasks'" :key="'weekly_tasks'" />
+          <GrowthTaskPanel v-else-if="activeTab === 'growth_tasks'" :key="'growth_tasks'" />
+          <RewardPoolPanel v-else-if="activeTab === 'reward_pool'" :key="'reward_pool'" />
           <ProgressTracker v-else-if="activeTab === 'progress'" :key="'progress'" />
           <RewardCenter v-else-if="activeTab === 'rewards'" :key="'rewards'" />
           <Leaderboard v-else-if="activeTab === 'leaderboard'" :key="'leaderboard'" />

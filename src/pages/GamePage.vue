@@ -5,18 +5,22 @@ import { useOrderStore } from '@/stores/orderStore'
 import { useEventStore } from '@/stores/eventStore'
 import { useSeasonStore } from '@/stores/seasonStore'
 import { useCharacterStore } from '@/stores/characterStore'
+import { useTaskStore } from '@/stores/taskStore'
 import { audioManager } from '@/game/audio'
 import StatusBar from '@/components/StatusBar.vue'
 import OrderPanel from '@/components/OrderPanel.vue'
 import Workbench from '@/components/Workbench.vue'
 import EventModal from '@/components/EventModal.vue'
 import HomeSeasonCard from '@/components/season/HomeSeasonCard.vue'
+import HomeTaskCard from '@/components/task/HomeTaskCard.vue'
+import TaskReminder from '@/components/task/TaskReminder.vue'
 
 const gameStore = useGameStore()
 const orderStore = useOrderStore()
 const eventStore = useEventStore()
 const seasonStore = useSeasonStore()
 const characterStore = useCharacterStore()
+const taskStore = useTaskStore()
 
 const showStartScreen = ref(true)
 const hasExistingSave = ref(false)
@@ -74,6 +78,7 @@ function handleGameOverRestart() {
 onMounted(() => {
   hasExistingSave.value = gameStore.hasSave()
   seasonStore.initSeason()
+  taskStore.initTaskCenter()
 })
 
 watch(() => gameStore.gameStarted, (started) => {
@@ -193,6 +198,8 @@ const bgClass = () => {
 
     <EventModal />
     <HomeSeasonCard />
+    <HomeTaskCard />
+    <TaskReminder />
   </div>
 </template>
 

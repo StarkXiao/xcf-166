@@ -2,15 +2,17 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useFriendStore } from '@/stores/friendStore'
+import { useTaskStore } from '@/stores/taskStore'
 import { friendshipMilestones } from '@/game/data/friendData'
 import FriendList from '@/components/friend/FriendList.vue'
 import FriendInvitePanel from '@/components/friend/FriendInvitePanel.vue'
 import MutualTaskPanel from '@/components/friend/MutualTaskPanel.vue'
-import { Users, UserPlus, ListTodo, Star, Heart, TrendingUp, Award, Zap, Gift } from 'lucide-vue-next'
+import { Users, UserPlus, ListTodo, Star, Heart, TrendingUp, Award, Zap, Gift, Target } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
 const friendStore = useFriendStore()
+const taskStore = useTaskStore()
 
 function handleNavigateTo(target: string) {
   if (target === 'game') {
@@ -18,13 +20,14 @@ function handleNavigateTo(target: string) {
   }
 }
 
-const activeTab = ref<'list' | 'invites' | 'tasks' | 'rewards'>('list')
+const activeTab = ref<'list' | 'invites' | 'tasks' | 'rewards' | 'linked'>('list')
 const selectedFriendId = ref<string | null>(null)
 
 const tabs = [
   { id: 'list', name: '好友列表', icon: Users, color: 'pink' },
   { id: 'invites', name: '好友邀请', icon: UserPlus, color: 'cyan' },
   { id: 'tasks', name: '互助任务', icon: ListTodo, color: 'green' },
+  { id: 'linked', name: '任务联动', icon: Target, color: 'emerald' },
   { id: 'rewards', name: '友谊奖励', icon: Star, color: 'amber' }
 ] as const
 
@@ -32,6 +35,7 @@ const tabColorClasses: Record<string, { bg: string; text: string; border: string
   pink: { bg: 'bg-pink-600', text: 'text-pink-400', border: 'border-pink-500', gradient: 'from-pink-500 to-rose-500' },
   cyan: { bg: 'bg-cyan-600', text: 'text-cyan-400', border: 'border-cyan-500', gradient: 'from-cyan-500 to-blue-500' },
   green: { bg: 'bg-green-600', text: 'text-green-400', border: 'border-green-500', gradient: 'from-green-500 to-emerald-500' },
+  emerald: { bg: 'bg-emerald-600', text: 'text-emerald-400', border: 'border-emerald-500', gradient: 'from-emerald-500 to-teal-500' },
   amber: { bg: 'bg-amber-600', text: 'text-amber-400', border: 'border-amber-500', gradient: 'from-amber-500 to-orange-500' }
 }
 
@@ -60,9 +64,10 @@ function handleSelectFriend(friendId: string) {
 
 onMounted(() => {
   friendStore.initFriendSystem()
+  taskStore.initTaskCenter()
 
   const tabParam = route.query.tab as string
-  if (tabParam && ['list', 'invites', 'tasks', 'rewards'].includes(tabParam)) {
+  if (tabParam && ['list', 'invites', 'tasks', 'rewards', 'linked'].includes(tabParam)) {
     activeTab.value = tabParam as typeof activeTab.value
   }
 })
@@ -156,6 +161,12 @@ onMounted(() => {
             >
               {{ friendStore.unclaimedRewardCount }}
             </span>
+            <span
+              v-if="tab.id === 'linked' && taskStore.mergedRecords.length > 0"
+              class="px-2 py-0.5 rounded-full text-xs bg-emerald-500 text-white font-bold"
+            >
+              {{ taskStore.mergedRecords.length }}
+            </span>
           </button>
         </div>
       </div>
@@ -172,6 +183,94 @@ onMounted(() => {
 
           <div v-else-if="activeTab === 'tasks'" key="tasks">
             <MutualTaskPanel :friend-id="selectedFriendId || undefined" @navigate-to="handleNavigateTo" />
+          </div>
+
+          <div v-else-if="activeTab === 'linked'" key="linked">
+            <div>
+              <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <Target class="w-5 h-5 text-emerald-400" />
+                任务联动中心
+              </h3>
+              <p class="text-sm text-gray-400 mb-6">完成互助任务可同步推进周常与成长任务进度，实现多线并行成长</p>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div class="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
+                  <div class="flex items-center gap-2 mb-3">
+                    <Zap class="w-5 h-5 text-emerald-400" />
+                    <span class="font-bold text-emerald-300">赛季 → 周常</span>
+                  </div>
+                  <p class="text-sm text-gray-400 mb-3">完成赛季日常任务时，自动将50%进度合并至对应周常任务</p>
+                  <div class="flex items-center gap-2 text-xs text-emerald-400">
+                    <span>周常完成</span>
+                    <span class="font-bold">{{ taskStore.completedWeeklyCount }}/{{ taskStore.totalWeeklyTasks }}</span>
+                  </div>
+                </div>
+
+                <div class="p-4 bg-purple-500/10 border border-purple-500/30 rounded-xl">
+                  <div class="flex items-center gap-2 mb-3">
+                    <TrendingUp class="w-5 h-5 text-purple-400" />
+                    <span class="font-bold text-purple-300">周常 → 成长</span>
+                  </div>
+                  <p class="text-sm text-gray-400 mb-3">领取周常任务奖励时，自动将30%进度合并至对应成长任务</p>
+                  <div class="flex items-center gap-2 text-xs text-purple-400">
+                    <span>成长完成</span>
+                    <span class="font-bold">{{ taskStore.completedGrowthCount }}/{{ taskStore.totalGrowthTasks }}</span>
+                  </div>
+                </div>
+
+                <div class="p-4 bg-pink-500/10 border border-pink-500/30 rounded-xl">
+                  <div class="flex items-center gap-2 mb-3">
+                    <Heart class="w-5 h-5 text-pink-400" />
+                    <span class="font-bold text-pink-300">互助 → 周常</span>
+                  </div>
+                  <p class="text-sm text-gray-400 mb-3">完成好友互助任务时，自动将50%进度合并至对应周常任务</p>
+                  <div class="flex items-center gap-2 text-xs text-pink-400">
+                    <span>互助完成</span>
+                    <span class="font-bold">{{ friendStore.statistics.completedMutualTasks }}次</span>
+                  </div>
+                </div>
+
+                <div class="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                  <div class="flex items-center gap-2 mb-3">
+                    <Star class="w-5 h-5 text-amber-400" />
+                    <span class="font-bold text-amber-300">奖励池</span>
+                  </div>
+                  <p class="text-sm text-gray-400 mb-3">完成周常与成长任务均贡献奖励池积分，累积解锁丰厚奖励</p>
+                  <div class="flex items-center gap-2 text-xs text-amber-400">
+                    <span>当前积分</span>
+                    <span class="font-bold">{{ taskStore.rewardPoolProgress.points }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <ListTodo class="w-5 h-5 text-gray-400" />
+                近期合并记录
+              </h3>
+              <div v-if="taskStore.mergedRecords.length === 0" class="text-center py-8 text-gray-500">
+                <Target class="w-12 h-12 mx-auto mb-2 opacity-30" />
+                <p>暂无合并记录</p>
+                <p class="text-xs mt-1">完成赛季或互助任务后自动触发合并</p>
+              </div>
+              <div v-else class="space-y-2">
+                <div
+                  v-for="record in taskStore.mergedRecords.slice(0, 10)"
+                  :key="record.id"
+                  class="flex items-center justify-between p-3 bg-gray-800/50 rounded-xl"
+                >
+                  <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                      <Zap class="w-5 h-5 text-emerald-400" />
+                    </div>
+                    <div>
+                      <div class="text-sm text-white">{{ record.sourceType === 'daily_to_weekly' ? '赛季→周常' : record.sourceType === 'weekly_to_growth' ? '周常→成长' : '互助→周常' }}</div>
+                      <div class="text-xs text-gray-500">+{{ record.amount }} 合并进度</div>
+                    </div>
+                  </div>
+                  <div class="text-xs text-gray-500">{{ new Date(record.timestamp).toLocaleString() }}</div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div v-else-if="activeTab === 'rewards'" key="rewards">
