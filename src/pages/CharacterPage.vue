@@ -9,6 +9,7 @@ import { useShopStore } from '@/stores/shopStore'
 import { audioManager } from '@/game/audio'
 import type { Character, CharacterSkill } from '@/game/characterTypes'
 import { synergyRules } from '@/game/data/synergies'
+import { getItemDef } from '@/game/data/itemCatalog'
 import BadgeDisplay from '@/components/achievement/BadgeDisplay.vue'
 import { Trophy, Medal, Crown, Sparkles, Link2, Eye } from 'lucide-vue-next'
 
@@ -121,6 +122,14 @@ const synergyPreviewText = computed(() => {
   return parts
 })
 
+const RARITY_ORDER: Record<string, number> = {
+  common: 0,
+  uncommon: 1,
+  rare: 2,
+  epic: 3,
+  legendary: 4
+}
+
 function getSynergyProgress(rule: typeof synergyRules[0]): { current: number; total: number; description: string } {
   switch (rule.activationMode) {
     case 'character_pair': {
@@ -133,24 +142,45 @@ function getSynergyProgress(rule: typeof synergyRules[0]): { current: number; to
       }
     }
     case 'character_item': {
-      const itemCount = shopStore.inventory.reduce((sum, i) => sum + i.quantity, 0)
+      const requiredCategory = rule.requiredItemCategory
+      const requiredRarity = rule.requiredItemRarity
+      const minRarityRank = requiredRarity ? (RARITY_ORDER[requiredRarity] ?? 0) : 0
+      let qualifyingCount = 0
+      for (const inv of shopStore.inventory) {
+        if (inv.quantity <= 0) continue
+        const def = getItemDef(inv.itemId)
+        if (!def) continue
+        if (requiredCategory && def.category !== requiredCategory) continue
+        if (requiredRarity) {
+          const itemRank = RARITY_ORDER[def.rarity] ?? 0
+          if (itemRank < minRarityRank) continue
+        }
+        qualifyingCount += inv.quantity
+      }
       const needed = rule.requiredItemCount || 0
+      const rarityDesc = requiredRarity ? `${requiredRarity === 'rare' ? '稀有' : requiredRarity === 'epic' ? '史诗' : requiredRarity === 'legendary' ? '传说' : '普通'}以上` : ''
+      const catDesc = requiredCategory === 'material' ? '材料' : requiredCategory || '物品'
       return {
-        current: Math.min(itemCount, needed),
+        current: Math.min(qualifyingCount, needed),
         total: needed,
-        description: `持有 ${itemCount}/${needed} 件材料`
+        description: `持有${rarityDesc}${catDesc} ${qualifyingCount}/${needed} 件`
       }
     }
     case 'item_set': {
       const requiredItems = rule.requiredItemIds || []
       let found = 0
+      const foundNames: string[] = []
       for (const itemId of requiredItems) {
-        if (shopStore.inventory.some(i => i.itemId === itemId && i.quantity > 0)) found++
+        if (shopStore.inventory.some(i => i.itemId === itemId && i.quantity > 0)) {
+          found++
+          const def = getItemDef(itemId)
+          if (def) foundNames.push(def.name)
+        }
       }
       return {
         current: found,
         total: requiredItems.length,
-        description: `拥有 ${found}/${requiredItems.length} 件套装物品`
+        description: foundNames.length > 0 ? `${foundNames.join('、')} (${found}/${requiredItems.length})` : `拥有 ${found}/${requiredItems.length} 件套装物品`
       }
     }
     case 'skill_combo': {

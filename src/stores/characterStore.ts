@@ -12,6 +12,7 @@ import type {
 } from '../game/characterTypes'
 import { getAllCharacters, getExpForLevel, getAttributeGainPerLevel } from '../game/data/characters'
 import { synergyRules } from '../game/data/synergies'
+import { getItemDef } from '../game/data/itemCatalog'
 import { useGameStore } from './gameStore'
 import { useAchievementStore } from './achievementStore'
 import { useShopStore } from './shopStore'
@@ -60,20 +61,24 @@ export const useCharacterStore = defineStore('character', () => {
     return pendingPerfectComplete.value
   })
 
+  const RARITY_ORDER: Record<string, number> = {
+    common: 0,
+    uncommon: 1,
+    rare: 2,
+    epic: 3,
+    legendary: 4
+  }
+
   const activeSynergies = computed((): ActiveSynergy[] => {
     const result: ActiveSynergy[] = []
     const unlockedIds = new Set(
       characters.value.filter(c => c.unlocked).map(c => c.id)
     )
     const activeId = activeCharacterId.value
-    let inventoryItemCount = 0
-    const inventoryItemIds = new Set<string>()
+
+    let shopStore: ReturnType<typeof useShopStore> | null = null
     try {
-      const shopStore = useShopStore()
-      for (const item of shopStore.inventory) {
-        inventoryItemCount += item.quantity
-        inventoryItemIds.add(item.itemId)
-      }
+      shopStore = useShopStore()
     } catch {}
 
     const unlockedSkillIds = new Set<string>()
@@ -105,33 +110,57 @@ export const useCharacterStore = defineStore('character', () => {
         }
         case 'character_item': {
           const requiredChars = rule.requiredCharacterIds || []
-          if (activeId && requiredChars.includes(activeId)) {
-            const count = rule.requiredItemCount || 0
-            if (count <= inventoryItemCount) {
+          if (activeId && requiredChars.includes(activeId) && shopStore) {
+            const requiredCategory = rule.requiredItemCategory
+            const requiredRarity = rule.requiredItemRarity
+            const minRarityRank = requiredRarity ? (RARITY_ORDER[requiredRarity] ?? 0) : 0
+
+            let qualifyingCount = 0
+            const qualifyingNames: string[] = []
+
+            for (const inv of shopStore.inventory) {
+              if (inv.quantity <= 0) continue
+              const def = getItemDef(inv.itemId)
+              if (!def) continue
+              if (requiredCategory && def.category !== requiredCategory) continue
+              if (requiredRarity) {
+                const itemRank = RARITY_ORDER[def.rarity] ?? 0
+                if (itemRank < minRarityRank) continue
+              }
+              qualifyingCount += inv.quantity
+              if (qualifyingNames.length < 3) {
+                qualifyingNames.push(def.name)
+              }
+            }
+
+            const needed = rule.requiredItemCount || 0
+            if (qualifyingCount >= needed) {
               activated = true
               const charName = characters.value.find(c => c.id === activeId)?.name || activeId
-              sourceDesc = `${charName} + ${count}件材料`
+              const itemDesc = qualifyingNames.length > 0 ? qualifyingNames.join('、') : `${qualifyingCount}件`
+              sourceDesc = `${charName} + ${itemDesc}`
             }
           }
           break
         }
         case 'item_set': {
           const requiredItems = rule.requiredItemIds || []
-          let allFound = true
-          for (const itemId of requiredItems) {
-            let found = false
-            try {
-              const shopStore = useShopStore()
-              found = shopStore.inventory.some(i => i.itemId === itemId && i.quantity > 0)
-            } catch {}
-            if (!found) {
-              allFound = false
-              break
+          if (shopStore) {
+            let allFound = true
+            const foundNames: string[] = []
+            for (const itemId of requiredItems) {
+              const hasItem = shopStore.inventory.some(i => i.itemId === itemId && i.quantity > 0)
+              if (!hasItem) {
+                allFound = false
+                break
+              }
+              const def = getItemDef(itemId)
+              if (def) foundNames.push(def.name)
             }
-          }
-          if (allFound) {
-            activated = true
-            sourceDesc = `物品套装：${requiredItems.length}件组合`
+            if (allFound) {
+              activated = true
+              sourceDesc = `物品套装：${foundNames.join(' + ')}`
+            }
           }
           break
         }

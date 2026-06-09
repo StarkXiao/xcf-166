@@ -218,12 +218,16 @@ export const useDungeonStore = defineStore('dungeon', () => {
 
     const gameStore = useGameStore()
     const characterStore = useCharacterStore()
-    const combatBonus = characterStore.totalCombatBonus
+    const cb = characterStore.totalCombatBonus
 
     const playerHp = gameStore.stats.sanity
     const playerMaxHp = gameStore.stats.maxSanity
-    const playerAttack = (15 + gameStore.stats.reputation * 0.3) * (1 + combatBonus.processingSpeed / 100)
-    const playerDefense = (5 + gameStore.stats.totalOrdersCompleted * 0.5) * (1 + combatBonus.sanityProtection / 100)
+
+    const playerAttack = (15 + gameStore.stats.reputation * 0.3) * (1 + cb.processingSpeed / 100)
+    const playerBaseDefense = 5 + gameStore.stats.totalOrdersCompleted * 0.5
+    const anomalyResistFactor = 1 - Math.min(cb.anomalyResistance / 100, 0.75)
+    const sanityProtFactor = 1 - Math.min(cb.sanityProtection / 100, 0.75)
+    const critChance = Math.min(cb.successRateBonus / 100, 0.5)
 
     const events: BattleEvent[] = []
     let currentHp = playerHp
@@ -231,7 +235,6 @@ export const useDungeonStore = defineStore('dungeon', () => {
     const enemyHps = stage.enemies.map((e) => ({ ...e, currentHp: e.hp }))
 
     const totalEnemyHp = enemyHps.reduce((s, e) => s + e.currentHp, 0)
-    const isWin = playerHp > totalEnemyHp * 0.3
 
     const maxTurns = Math.min(stage.timeLimit / 5, 20)
     let remainingEnemyHp = totalEnemyHp
@@ -240,38 +243,51 @@ export const useDungeonStore = defineStore('dungeon', () => {
 
     for (let i = 0; i < maxTurns && currentHp > 0 && remainingEnemyHp > 0; i++) {
       turn++
-      const playerDmg = Math.max(1, Math.floor(playerAttack * (0.8 + Math.random() * 0.4) - enemyHps[0].defense * 0.3))
+
+      const isCrit = Math.random() < critChance
+      const critMultiplier = isCrit ? 1.5 : 1.0
+      const playerDmg = Math.max(1, Math.floor(
+        playerAttack * (0.8 + Math.random() * 0.4) * critMultiplier - enemyHps[0].defense * 0.3
+      ))
       remainingEnemyHp -= playerDmg
       totalDamageDealt += playerDmg
+      const dmgDesc = isCrit ? `暴击！对${enemyHps[0].name}造成了${playerDmg}点伤害` : `你对${enemyHps[0].name}造成了${playerDmg}点伤害`
       events.push({
         turn,
         timestamp: Date.now() + i * 1000,
         actor: 'player',
-        action: '攻击',
+        action: isCrit ? '暴击' : '攻击',
         damage: playerDmg,
         targetId: enemyHps[0].id,
         targetName: enemyHps[0].name,
         remainingHp: Math.max(0, remainingEnemyHp),
-        description: `你对${enemyHps[0].name}造成了${playerDmg}点伤害`,
+        description: dmgDesc,
       })
 
       if (remainingEnemyHp <= 0) break
 
       for (const enemy of enemyHps) {
         if (enemy.currentHp <= 0) continue
-        const enemyDmg = Math.max(1, Math.floor(enemy.attack * (0.8 + Math.random() * 0.4) - playerDefense * 0.3))
+
+        const isSkillAttack = enemy.skills.length > 0 && Math.random() < 0.6
+        const skill = isSkillAttack ? enemy.skills[Math.floor(Math.random() * enemy.skills.length)] : null
+        const skillMultiplier = skill ? 1.3 : 1.0
+        const rawDamage = enemy.attack * (0.8 + Math.random() * 0.4) * skillMultiplier - playerBaseDefense * 0.3
+        const resistFactor = skill ? anomalyResistFactor : 1.0
+        const enemyDmg = Math.max(1, Math.floor(rawDamage * resistFactor * sanityProtFactor))
         currentHp -= enemyDmg
         totalDamageTaken += enemyDmg
+        const actionName = skill?.name || '攻击'
         events.push({
           turn,
           timestamp: Date.now() + i * 1000 + 500,
           actor: 'enemy',
-          action: enemy.skills[0]?.name || '攻击',
+          action: actionName,
           damage: enemyDmg,
           targetId: 'player',
           targetName: '渡灵者',
           remainingHp: Math.max(0, currentHp),
-          description: `${enemy.name}使用${enemy.skills[0]?.name || '攻击'}对你造成了${enemyDmg}点伤害`,
+          description: `${enemy.name}使用${actionName}对你造成了${enemyDmg}点伤害`,
         })
         if (currentHp <= 0) break
       }

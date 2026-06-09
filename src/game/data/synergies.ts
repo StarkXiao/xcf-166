@@ -1,4 +1,4 @@
-import type { SynergyRule } from '../characterTypes'
+import type { SynergyRule, SynergyRarity } from '../characterTypes'
 
 export const synergyRules: SynergyRule[] = [
   {
@@ -140,6 +140,7 @@ export const synergyRules: SynergyRule[] = [
     activationMode: 'character_item',
     requiredCharacterIds: ['exorcist'],
     requiredItemCategory: 'material',
+    requiredItemRarity: 'rare',
     requiredItemCount: 2,
     effect: {
       combatBonus: { processingSpeed: 8, sanityProtection: 10, anomalyResistance: 8 },
@@ -252,5 +253,3 @@ export function getSynergiesByRarity(rarity: SynergyRule['rarity']): SynergyRule
 export function getSynergiesByMode(mode: SynergyRule['activationMode']): SynergyRule[] {
   return synergyRules.filter(r => r.activationMode === mode)
 }
-
-import type { SynergyRarity } from '../characterTypes'

@@ -104,6 +104,8 @@ export interface SynergyEffect {
   description: string
 }
 
+export type ItemRarityThreshold = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
+
 export interface SynergyRule {
   id: string
   name: string
@@ -115,6 +117,7 @@ export interface SynergyRule {
   requiredItemIds?: string[]
   requiredSkillIds?: string[]
   requiredItemCategory?: string
+  requiredItemRarity?: ItemRarityThreshold
   requiredItemCount?: number
   effect: SynergyEffect
   lore: string
