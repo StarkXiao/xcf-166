@@ -179,11 +179,18 @@ const paymentConversionMetrics = computed(() => {
   const purchaseDates = new Set(shopBehaviorEvents.map(e => toDateKey(e.timestamp)))
   const purchaseActiveDays = purchaseDates.size
 
-  const activeDays = activeDateSet.value.size
-  const payRate = activeDays > 0 ? Math.round((purchaseActiveDays / activeDays) * 100) : 0
+  const totalUsers = 1
+  const activeUsers = activeDateSet.value.size > 0 ? 1 : 0
+  const loginUsers = achievementStore.totalLoginDays > 0 ? 1 : 0
+  const payingUsers = totalPurchases > 0 ? 1 : 0
 
-  const loginDays = achievementStore.totalLoginDays
-  const payRateByLogin = loginDays > 0 ? Math.round((purchaseActiveDays / loginDays) * 100) : 0
+  const payRateByActive = activeUsers > 0 ? Math.round((payingUsers / activeUsers) * 100) : 0
+  const payRateByLogin = loginUsers > 0 ? Math.round((payingUsers / loginUsers) * 100) : 0
+
+  const avgPurchasesPerPayingUser = payingUsers > 0 ? totalPurchases : 0
+  const avgRevenuePerPayingUser = payingUsers > 0 ? totalRevenue : 0
+
+  const isSingleUser = true
 
   return {
     totalPurchases,
@@ -192,15 +199,20 @@ const paymentConversionMetrics = computed(() => {
     inventoryCount,
     activeDiscounts,
     itemsOnSale,
-    payRate,
+    payRateByActive,
     payRateByLogin,
     discountUtilization,
     avgDailySpend,
     uniqueSkusPurchased,
     totalSkus,
     purchaseActiveDays,
-    activeDays,
-    loginDays,
+    totalUsers,
+    activeUsers,
+    loginUsers,
+    payingUsers,
+    avgPurchasesPerPayingUser,
+    avgRevenuePerPayingUser,
+    isSingleUser,
     currentMoney: gameStore.stats.money,
   }
 })
@@ -579,9 +591,9 @@ function goBack() {
               <CreditCard class="w-4 h-4 text-amber-400" />
             </div>
           </div>
-          <div class="text-2xl font-bold text-amber-400">{{ paymentConversionMetrics.payRate }}%</div>
+          <div class="text-2xl font-bold text-amber-400">{{ paymentConversionMetrics.payRateByActive }}%</div>
           <div class="mt-2 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-            <div class="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full transition-all" :style="{ width: `${paymentConversionMetrics.payRate}%` }"></div>
+            <div class="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full transition-all" :style="{ width: `${paymentConversionMetrics.payRateByActive}%` }"></div>
           </div>
         </div>
 
@@ -805,12 +817,12 @@ function goBack() {
             <div class="mt-2 pt-3 border-t border-gray-700">
               <div class="flex items-center justify-between text-sm mb-1">
                 <span class="text-gray-400">付费转化率 (活跃)</span>
-                <span class="text-amber-400 font-medium">{{ paymentConversionMetrics.payRate }}%</span>
+                <span class="text-amber-400 font-medium">{{ paymentConversionMetrics.payRateByActive }}%</span>
               </div>
               <div class="h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                <div class="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full" :style="{ width: `${paymentConversionMetrics.payRate}%` }"></div>
+                <div class="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full" :style="{ width: `${paymentConversionMetrics.payRateByActive}%` }"></div>
               </div>
-              <p class="text-xs text-gray-500 mt-1">付费天数 {{ paymentConversionMetrics.purchaseActiveDays }} / 活跃天数 {{ paymentConversionMetrics.activeDays }}</p>
+              <p class="text-xs text-gray-500 mt-1">付费人数 {{ paymentConversionMetrics.payingUsers }} / 活跃人数 {{ paymentConversionMetrics.activeUsers }}</p>
             </div>
             <div class="mt-2">
               <div class="flex items-center justify-between text-sm mb-1">
@@ -820,7 +832,25 @@ function goBack() {
               <div class="h-1.5 bg-gray-700 rounded-full overflow-hidden">
                 <div class="h-full bg-gradient-to-r from-amber-500/70 to-amber-300/70 rounded-full" :style="{ width: `${paymentConversionMetrics.payRateByLogin}%` }"></div>
               </div>
-              <p class="text-xs text-gray-500 mt-1">付费天数 {{ paymentConversionMetrics.purchaseActiveDays }} / 登录天数 {{ paymentConversionMetrics.loginDays }}</p>
+              <p class="text-xs text-gray-500 mt-1">付费人数 {{ paymentConversionMetrics.payingUsers }} / 登录人数 {{ paymentConversionMetrics.loginUsers }}</p>
+            </div>
+            <div v-if="paymentConversionMetrics.isSingleUser" class="mt-2 px-3 py-2 bg-gray-700/40 rounded-lg">
+              <p class="text-xs text-gray-400">单用户存档：转化率 = 该用户是否曾付费</p>
+              <p class="text-xs mt-1" :class="paymentConversionMetrics.payingUsers > 0 ? 'text-green-400' : 'text-gray-500'">
+                {{ paymentConversionMetrics.payingUsers > 0 ? '已付费用户' : '未付费用户' }}
+              </p>
+            </div>
+            <div class="flex items-center justify-between text-sm mt-2">
+              <span class="text-gray-400">总用户数</span>
+              <span class="text-white font-medium">{{ paymentConversionMetrics.totalUsers }}</span>
+            </div>
+            <div class="flex items-center justify-between text-sm">
+              <span class="text-gray-400">付费用户人均购买</span>
+              <span class="text-cyan-400 font-medium">{{ paymentConversionMetrics.avgPurchasesPerPayingUser }} 次</span>
+            </div>
+            <div class="flex items-center justify-between text-sm">
+              <span class="text-gray-400">付费用户人均消费</span>
+              <span class="text-amber-400 font-medium">{{ paymentConversionMetrics.avgRevenuePerPayingUser }}</span>
             </div>
             <div class="flex items-center justify-between text-sm">
               <span class="text-gray-400">日均消费</span>
@@ -835,7 +865,7 @@ function goBack() {
               <span class="text-cyan-400 font-medium">{{ paymentConversionMetrics.uniqueSkusPurchased }} / {{ paymentConversionMetrics.totalSkus }}</span>
             </div>
             <div class="flex items-center justify-between text-sm">
-              <span class="text-gray-400">购买活跃天数</span>
+              <span class="text-gray-400">购买覆盖天数</span>
               <span class="text-purple-400 font-medium">{{ paymentConversionMetrics.purchaseActiveDays }}</span>
             </div>
           </div>
