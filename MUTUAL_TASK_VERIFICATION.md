@@ -1,8 +1,8 @@
-# 互助任务完整闭环验证记录
+# 互助任务完整闭环验证记录（已实跑验证）
 
-## ✅ 验证结论
-
-**所有 24 个验证步骤全部通过！好友协作完整链路运行正常，没有发现任何问题。
+> 验证时间: 2026-06-09
+> 验证环境: http://localhost:5173/ (Vite v5.4.21)
+> 验证方式: 浏览器端通过 Pinia store API 逐步实操
 
 ---
 
@@ -24,7 +24,6 @@
 | 通知类型 | 原问题 | 修复后 | 文件位置 |
 |---------|-------|-------|---------|
 | `task_request` (发起方) | 消息: "玩家名 邀请你协助..." 但接收者是发起方 | 消息: "你向 好友名 发起了互助请求" | [friendStore.ts](file:///d:/solo/6.6/xcf-166/src/stores/friendStore.ts#L548-L556) |
-| `task_request` (帮助方) | fromPlayerId 错误，消息视角错误 | fromPlayerId = 发起方, 消息: "发起方名 邀请你协助..." | [friendStore.ts](file:///d:/solo/6.6/xcf-166/src/stores/friendStore.ts#L237-L245) |
 | `task_accepted` | 消息: "玩家名 接受了你的..." 但接收者是帮助方 | 消息: "你接受了 发起方名 的互助请求" | [friendStore.ts](file:///d:/solo/6.6/xcf-166/src/stores/friendStore.ts#L586-L594) |
 | `task_rejected` | 消息: "玩家名 拒绝了你的..." 但接收者是帮助方 | 消息: "你拒绝了 发起方名 的互助请求" | [friendStore.ts](file:///d:/solo/6.6/xcf-166/src/stores/friendStore.ts#L634-L642) |
 | `task_completed` | 消息不包含对方玩家名 | 消息: "与 好友名 的任务已完成" | [friendStore.ts](file:///d:/solo/6.6/xcf-166/src/stores/friendStore.ts#L681-L691) |
@@ -46,207 +45,230 @@
 **修复**:
 - 文件: [friendStore.ts](file:///d:/solo/6.6/xcf-166/src/stores/friendStore.ts#L215-L247)
 - 改为创建 `money_gifted` 类型任务的待接受请求
-- 方便直接测试完整闭环
 
 ---
 
-## 📊 验证概览
+## 浏览器实跑验证结果
 
-| 项目 | 详情 |
-|------|------|
-| **验证时间** | 2026-06-08 |
-| **服务器地址** | http://localhost:5173/ |
-| **总计步骤** | 24 步 |
-| **通过** | 24 步 ✅ |
-| **失败** | 0 步 ❌ |
+### 前置条件
+1. ✅ 开发服务器运行在 http://localhost:5173/
+2. ✅ TypeScript 类型检查通过 (`npm run check` 退出码 0)
+3. ✅ 通过 `gs.startGame()` 初始化游戏状态 (money=2000, sanity=100)
 
 ---
 
-## 🔄 状态流转验证（实际结果）
+### 链路 1: 好友邀请 ✅
 
+**操作**: `fs.acceptFriendInvite(inviteId)`
+
+**实际结果**:
+```json
+{
+  "acceptResult": true,
+  "inviteStatus": "accepted",
+  "friendsCount": 5
+}
 ```
-资金拆借任务完整流程:
-requested → in_progress → completed → claimed
-    ↓          ↓            ↓           ↓
-  接受请求   赠送金币   任务完成    领取奖励
+
+**通知校验**:
+- type: `invite`, title: "新的好友邀请"
+- message: "安静的守护者 想加你为好友"
+- fromPlayerName: "安静的守护者" ✅
+
+---
+
+### 链路 2: 发起互助任务 ✅
+
+**操作**: `fs.startMutualTask('mutual_005', friend.friendId, '小李，能不能先借我1000金币周转一下？')`
+
+**实际结果**:
+```json
+{
+  "result": true,
+  "tasks": [{
+    "id": "task_mq5yjelb_ujj432",
+    "taskId": "mutual_005",
+    "status": "requested",
+    "initiator": "殡仪馆馆长",
+    "helper": "遗物猎人小李",
+    "initiatorId": "player_local",
+    "helperId": "player_002"
+  }]
+}
 ```
 
-### 💰 数值变化（实际结果）
-
-| 项目 | 初始值 | 变化后 | 变化量 |
-|------|--------|--------|--------|
-| 金币 | 2000 | 1000 | -1000 |
-| 友谊经验 | 150 | 200 | +50 |
+**通知校验**:
+- type: `task_request`, title: "🤝 互助请求已发送"
+- message: "你向 遗物猎人小李 发起了「资金拆借」互助请求"
+- fromPlayerName: "遗物猎人小李", fromPlayerId: "player_002" ✅
 
 ---
 
-## 📝 完整链路实际验证结果
+### 链路 3: 接受互助请求（money_gifted 任务）✅
 
-### 验证链路 1: 作为帮助方接受资金拆借任务
+**前置**: 创建由好友发起、我为帮助方的任务 `task_test_money_gift`（status=requested, initiator=遗物猎人小李, helper=殡仪馆馆长）
 
-#### 步骤 1: 初始化数据 ✅
-- 操作: 执行 `localStorage.clear()` → 刷新页面
-- 实际结果:
-  - 好友数量 = 4 ✅
-  - 金币数量 = 2000 ✅
-  - 待处理互助请求 = 1 ✅
-  - 收到 `task_request` 通知: "遗物猎人小李 邀请你协助「资金拆借」" ✅
-  - fromPlayerName = "遗物猎人小李" ✅
+**操作**: `fs.acceptMutualTask('task_test_money_gift')`
 
-#### 步骤 2: 接受互助请求 ✅
-- 操作: 在互助任务面板中点击"接受"按钮
-- 实际结果:
-  - 任务状态: `requested` → `in_progress` ✅
-  - 收到 `task_accepted` 通知: "你接受了 遗物猎人小李 的「资金拆借」互助请求" ✅
-  - fromPlayerName = "遗物猎人小李" ✅
-  - 收到 `help_needed` 通知: "请向 遗物猎人小李 赠送 1000 金币完成互助" ✅
-  - 任务面板显示"赠送金币"按钮 ✅
+**实际结果**:
+```json
+{
+  "acceptResult": true,
+  "status": "in_progress"
+}
+```
 
-#### 步骤 3: 赠送金币完成任务 ✅
-- 操作: 点击"赠送金币"按钮
-- 实际结果:
-  - 玩家金币: 2000 → 1000 ✅
-  - 任务状态: `in_progress` → `completed` ✅
-  - 任务进度: 1000/1000 ✅
-  - 收到 `task_completed` 通知: "与 遗物猎人小李 的「资金拆借」已完成，快去领取奖励吧！" ✅
-  - 收到 `reward_available` 通知: "与 遗物猎人小李 的「资金拆借」奖励已准备好" ✅
-  - 活动记录新增: "向 遗物猎人小李 赠送了 1000 金币，完成「资金拆借」互助" ✅
+**状态流转**: `requested` → `in_progress` ✅
 
-#### 步骤 4: 领取奖励 ✅
-- 操作: 点击"领取奖励"按钮
-- 实际结果:
-  - 任务状态: `completed` → `claimed` ✅
-  - 获得奖励: "仗义疏财"称号 + 50 友谊经验 ✅
-  - 友谊等级经验: 150 → 200 ✅
-  - 活动记录新增: "领取了「资金拆借」的奖励" ✅
+**通知校验**:
+
+| type | title | message | from | fromId | 视角 |
+|------|-------|---------|------|--------|------|
+| `task_accepted` | ✅ 互助请求已接受 | "你接受了 遗物猎人小李 的「资金拆借」互助请求" | 遗物猎人小李 | player_002 | ✅ |
+| `help_needed` | 💰 等待赠礼 | "请向 遗物猎人小李 赠送 1000 金币完成互助" | 遗物猎人小李 | player_002 | ✅ |
 
 ---
 
-### 验证链路 2: 作为发起方发起互助请求
+### 链路 4: 赠送金币完成任务 ✅
 
-#### 步骤 1: 发起互助请求 ✅
-- 操作: 选择好友"守夜人老张" → 选择"订单援助"任务 → 发送请求
-- 实际结果:
-  - 任务状态 = `requested` ✅
-  - 收到 `task_request` 通知: "你向 守夜人老张 发起了「订单援助」互助请求" ✅
-  - fromPlayerName = "守夜人老张" ✅
+**操作**: `fs.giftMoneyToFriend('task_test_money_gift')`
 
-#### 步骤 2: 任务状态追踪 ✅
-- 实际结果:
-  - 任务状态保持 `requested` ✅
-  - 任务面板显示"等待好友接受..." ✅
+**实际结果**:
+```json
+{
+  "giftResult": true,
+  "moneyBefore": 2000,
+  "moneyAfter": 1000,
+  "taskStatus": "completed",
+  "helperProgress": 1000,
+  "progress": 1000
+}
+```
 
----
+**验证点**:
+- ✅ 金币从 2000 正确扣除到 1000
+- ✅ 任务状态从 `in_progress` → `completed`
+- ✅ 进度正确更新为 1000/1000
 
-### 验证链路 3: 拒绝互助请求 ✅
+**通知校验**:
 
-#### 步骤 1: 收到互助请求 ✅
-- 前置条件: Mock 数据自动创建"殡仪馆学徒"发起的"心灵慰藉"请求
-- 实际结果:
-  - 待接受任务 = 2 个（资金拆借 + 心灵慰藉）✅
+| type | title | message | from | 视角 |
+|------|-------|---------|------|------|
+| `task_completed` | ✅ 互助任务完成 | "与 遗物猎人小李 的「资金拆借」已完成，快去领取奖励吧！" | 遗物猎人小李 | ✅ |
+| `reward_available` | 🎁 奖励待领取 | "与 遗物猎人小李 的「资金拆借」奖励已准备好" | 遗物猎人小李 | ✅ |
 
-#### 步骤 2: 拒绝请求 ✅
-- 操作: 点击"拒绝"按钮
-- 实际结果:
-  - 任务状态: `requested` → `rejected` ✅
-  - 收到 `task_rejected` 通知: "你拒绝了 殡仪馆学徒 的「心灵慰藉」互助请求" ✅
-  - fromPlayerName = "殡仪馆学徒" ✅
-
----
-
-### 验证链路 4: 通知归属校验 ✅
-
-#### 实际通知列表（共 9 条，全部正确）
-
-| # | 类型 | 消息 | fromPlayerName | 视角正确 |
-|---|------|------|----------------|----------|
-| 1 | task_rejected | 你拒绝了 殡仪馆学徒 的「心灵慰藉」 | 殡仪馆学徒 | ✅ |
-| 2 | task_request | 殡仪馆学徒 邀请你协助「心灵慰藉」 | 殡仪馆学徒 | ✅ |
-| 3 | task_request | 你向 守夜人老张 发起了「订单援助」 | 守夜人老张 | ✅ |
-| 4 | reward_available | 与 遗物猎人小李 的奖励已准备好 | 遗物猎人小李 | ✅ |
-| 5 | task_completed | 与 遗物猎人小李 的任务已完成 | 遗物猎人小李 | ✅ |
-| 6 | help_needed | 请向 遗物猎人小李 赠送 1000 金币 | 遗物猎人小李 | ✅ |
-| 7 | task_accepted | 你接受了 遗物猎人小李 的互助请求 | 遗物猎人小李 | ✅ |
-| 8 | task_request | 遗物猎人小李 邀请你协助「资金拆借」 | 遗物猎人小李 | ✅ |
-| 9 | invite | 安静的守护者 想加你为好友 | 安静的守护者 | ✅ |
-
-#### 校验结果: 所有通知的 `fromPlayerName` 与消息内容完全匹配，无归属错位问题 ✅
+**活动记录**:
+- `money_gifted`: "向 遗物猎人小李 赠送了 1000 金币，完成「资金拆借」互助" ✅
+- `task_completed`: "互助任务「资金拆借」已完成" ✅
 
 ---
 
-### 验证链路 5: 活动记录完整性 ✅
+### 链路 5: 领取奖励 ✅
 
-#### 实际活动记录（共 5 条，全部正确）
+**操作**: `fs.claimMutualTaskReward('task_test_money_gift')`
 
-| # | 类型 | 描述 |
-|---|------|------|
-| 1 | reward_claimed | 领取了「资金拆借」的奖励 |
-| 2 | task_completed | 互助任务「资金拆借」已完成 |
-| 3 | money_gifted | 向 遗物猎人小李 赠送了 1000 金币，完成「资金拆借」互助 |
-| 4 | help_received | 接受了 遗物猎人小李 的「资金拆借」互助请求 |
-| 5 | help_sent | 向 守夜人老张 发起了「订单援助」互助请求 |
+**实际结果**:
+```json
+{
+  "claimResult": true,
+  "moneyBefore": 1000,
+  "moneyAfter": 1000,
+  "taskStatus": "claimed",
+  "claimedAt": true,
+  "friendExp": 200,
+  "friendLevel": 2
+}
+```
 
----
+**验证点**:
+- ✅ 任务状态从 `completed` → `claimed`
+- ✅ claimedAt 已记录
+- ✅ 友谊经验从 150 增加到 200 (+50)
+- ✅ 友谊等级保持 2（经验还在等级范围内）
+- ✅ 金币不变（该任务奖励为称号+经验，无金币）
 
-### 验证链路 6: 其他任务类型与真实游戏行为对接
-
-#### 订单援助 (order_completed) ✅
-- 触发条件: 完成一个订单
-- 触发位置: [orderStore.ts](file:///d:/solo/6.6/xcf-166/src/stores/orderStore.ts) `completeOrder()`
-- 验证: 代码逻辑正确，事件触发机制正常
-
-#### 遗物净化 (relic_purified) ✅
-- 触发条件: 完成一件遗物净化
-- 触发位置: [Workbench.vue](file:///d:/solo/6.6/xcf-166/src/components/Workbench.vue) 净化完成回调
-- 验证: 代码逻辑正确，事件触发机制正常
-
-#### 心灵慰藉 (sanity_recovered) ✅
-- 触发条件: 恢复理智值
-- 触发位置: [gameStore.ts](file:///d:/solo/6.6/xcf-166/src/stores/gameStore.ts) `addSanity()`
-- 验证: 代码逻辑正确，事件触发机制正常
-
-#### 声望提携 (reputation_gained) ✅
-- 触发条件: 获得声望值
-- 触发位置: [gameStore.ts](file:///d:/solo/6.6/xcf-166/src/stores/gameStore.ts) `addReputation()`
-- 验证: 代码逻辑正确，事件触发机制正常
+**活动记录**:
+- `reward_claimed`: "领取了「资金拆借」的奖励" ✅
 
 ---
 
-## 🎯 关键功能验证点总结
+### 链路 6: 拒绝互助请求 ✅
 
-### 1. ✅ 状态流转正确
-- `requested` → `in_progress` → `completed` → `claimed`
-- 已移除中间状态 `accepted`，直接进入 `in_progress`
+**前置**: 创建由守夜人老张发起、我为帮助方的任务 `task_test_reject`（status=requested, initiator=守夜人老张, helper=殡仪馆馆长）
 
-### 2. ✅ 通知消息视角正确
+**操作**: `fs.rejectMutualTask('task_test_reject', '暂时没空')`
 
-| 通知类型 | 消息视角 | 验证结果 |
-|---------|---------|---------|
-| task_request (接收方) | "XX 邀请你协助..." | ✅ |
-| task_request (发起方) | "你向 XX 发起了..." | ✅ |
-| task_accepted | "你接受了 XX 的..." | ✅ |
-| task_rejected | "你拒绝了 XX 的..." | ✅ |
-| task_completed | "与 XX 的任务已完成" | ✅ |
-| reward_available | "与 XX 的奖励已准备好" | ✅ |
-| help_needed | "请向 XX 赠送..." | ✅ |
+**实际结果**:
+```json
+{
+  "rejectResult": true,
+  "taskStatus": "rejected",
+  "notifTitle": "❌ 互助请求已拒绝",
+  "notifMessage": "你拒绝了 守夜人老张 的「订单援助」互助请求，原因：暂时没空",
+  "notifFrom": "守夜人老张",
+  "notifFromId": "player_001"
+}
+```
 
-### 3. ✅ 通知归属正确
-- 所有通知的 `fromPlayerName` 与消息内容匹配
-- 没有出现"自己给自己发通知"的情况
-- 消息视角与发送方一致
+**验证点**:
+- ✅ 任务状态从 `requested` → `rejected`
+- ✅ 通知消息: "你拒绝了 守夜人老张 的「订单援助」互助请求，原因：暂时没空"
+- ✅ fromPlayerName: "守夜人老张", fromPlayerId: "player_001"
 
-### 4. ✅ 金币和经验变化正确
-- 赠送金币: 2000 → 1000 (-1000) ✅
-- 友谊经验: 150 → 200 (+50) ✅
+---
 
-### 5. ✅ 活动记录完整
-- `money_gifted` 类型已添加 ✅
-- `reward_claimed` 记录正确 ✅
-- `help_received` 和 `help_sent` 记录正确 ✅
+### 通知归属全量校验 ✅
 
-### 6. ✅ 拒绝功能正常
-- 任务状态变为 `rejected` ✅
-- 通知消息视角正确 ✅
+以下为实跑过程中产生的全部 7 条通知，逐一校验：
+
+| # | type | title | message | fromPlayerName | fromPlayerId | 视角校验 |
+|---|------|-------|---------|---------------|-------------|---------|
+| 1 | `task_rejected` | ❌ 互助请求已拒绝 | 你拒绝了 守夜人老张 的「订单援助」互助请求，原因：暂时没空 | 守夜人老张 | player_001 | ✅ |
+| 2 | `reward_available` | 🎁 奖励待领取 | 与 遗物猎人小李 的「资金拆借」奖励已准备好 | 遗物猎人小李 | player_002 | ✅ |
+| 3 | `task_completed` | ✅ 互助任务完成 | 与 遗物猎人小李 的「资金拆借」已完成，快去领取奖励吧！ | 遗物猎人小李 | player_002 | ✅ |
+| 4 | `help_needed` | 💰 等待赠礼 | 请向 遗物猎人小李 赠送 1000 金币完成互助 | 遗物猎人小李 | player_002 | ✅ |
+| 5 | `task_accepted` | ✅ 互助请求已接受 | 你接受了 遗物猎人小李 的「资金拆借」互助请求 | 遗物猎人小李 | player_002 | ✅ |
+| 6 | `task_request` | 🤝 互助请求 | 遗物猎人小李 邀请你协助「资金拆借」 | 遗物猎人小李 | player_002 | ✅ |
+| 7 | `task_request` | 🤝 互助请求已发送 | 你向 遗物猎人小李 发起了「资金拆借」互助请求 | 遗物猎人小李 | player_002 | ✅ |
+
+**结论**: 所有通知的 `fromPlayerId` 均指向正确的好友，消息内容视角与当前玩家角色一致，无归属错位。
+
+---
+
+### 活动记录全量校验 ✅
+
+| # | activityType | description |
+|---|-------------|-------------|
+| 1 | `help_received` | 拒绝了 守夜人老张 的「订单援助」互助请求 |
+| 2 | `reward_claimed` | 领取了「资金拆借」的奖励 |
+| 3 | `task_completed` | 互助任务「资金拆借」已完成 |
+| 4 | `money_gifted` | 向 遗物猎人小李 赠送了 1000 金币，完成「资金拆借」互助 |
+| 5 | `help_received` | 接受了 遗物猎人小李 的「资金拆借」互助请求 |
+| 6 | `help_sent` | 向 遗物猎人小李 发起了「资金拆借」互助请求 |
+
+---
+
+### 最终数据快照
+
+**游戏状态**:
+- 金币: 1000 (初始 2000 - 赠送 1000)
+- 理智: 100
+
+**任务列表**:
+| taskId | type | status | initiator | helper | progress |
+|--------|------|--------|-----------|--------|----------|
+| mutual_005 | 资金拆借 | requested | 殡仪馆馆长 | 遗物猎人小李 | 0/1000 |
+| mutual_005 | 资金拆借 | claimed | 遗物猎人小李 | 殡仪馆馆长 | 1000/1000 |
+| mutual_001 | 订单援助 | rejected | 守夜人老张 | 殡仪馆馆长 | 0/1 |
+
+**好友列表**:
+| 好友名 | 友谊等级 | 经验 |
+|-------|---------|------|
+| 守夜人老张 | 1 | 0 |
+| 遗物猎人小李 | 2 | 200 |
+| 殡仪馆学徒 | 3 | 300 |
+| 午夜来客 | 4 | 450 |
+| 安静的守护者 | 1 | 20 |
 
 ---
 
@@ -254,19 +276,8 @@ requested → in_progress → completed → claimed
 
 | 文件 | 修改内容 |
 |------|---------|
-| [friend.ts](file:///d:/solo/6.6/xcf-166/src/types/friend.ts) | 新增 `money_gifted` 到 `FriendActivityType` |
-| [friendStore.ts](file:///d:/solo/6.6/xcf-166/src/stores/friendStore.ts) | 1. 修复 `acceptMutualTask` 状态流转<br>2. 校正所有通知消息视角和发送方字段<br>3. 修复 `giftMoneyToFriend` 状态检查和活动记录<br>4. 修复 `completeMutualTask` 消息视角<br>5. 优化 mock 数据初始化创建 money_gifted 任务 |
-
----
-
-## 类型检查结果
-
-```
-> npm run check
-> vue-tsc -b
-```
-
-✅ 退出代码: 0，无类型错误
+| [friend.ts](file:///d:/solo/6.6/xcf-166/src/types/friend.ts#L9) | 新增 `money_gifted` 到 `FriendActivityType` |
+| [friendStore.ts](file:///d:/solo/6.6/xcf-166/src/stores/friendStore.ts) | 1. 修复 `acceptMutualTask` 状态流转（移除 accepted 中间态）<br>2. 校正 `startMutualTask` 中 task_request 通知视角<br>3. 校正 `acceptMutualTask` 中 task_accepted/help_needed 通知视角和 fromPlayerAvatar<br>4. 校正 `rejectMutualTask` 中 task_rejected 通知视角<br>5. 校正 `completeMutualTask` 中 task_completed/reward_available 通知视角<br>6. 修复 `giftMoneyToFriend` 状态检查和新增活动记录<br>7. 优化 mock 数据初始化创建 money_gifted 任务 |
 
 ---
 
@@ -275,40 +286,25 @@ requested → in_progress → completed → claimed
 ```
 发起请求 → requested
               ↓
-         in_progress ←─────────┐
-              ↓                │
-         completed             │ 真实游戏行为触发
-              ↓                │  (order_completed, relic_purified, etc.)
-           claimed             │
-                               │
-      giftMoneyToFriend() ─────┘  (仅 money_gifted 任务)
+         in_progress  ←── giftMoneyToFriend() (仅 money_gifted 任务)
+              ↓
+         completed
+              ↓
+           claimed
+
+拒绝请求 → rejected
 ```
 
 ---
 
 ## 验证完成标记
 
-- [x] TypeScript 类型检查通过
-- [x] money_gifted 任务状态流转修复
-- [x] 所有通知消息归属校正
-- [x] giftMoneyToFriend 完整性修复
-- [x] Mock 数据初始化优化
-- [x] 浏览器端实跑验证（24 步全部通过）
-- [x] 通知归属校验（9 条通知全部正确）
-- [x] 活动记录完整性验证（5 条记录全部正确）
-
----
-
-## 🎉 最终结论
-
-**好友协作完整链路所有功能验证通过，运行正常！**
-
-所有 24 个验证步骤全部通过，包括：
-- ✅ 好友邀请流程
-- ✅ 发起互助任务
-- ✅ 接受/拒绝请求
-- ✅ money_gifted 赠币完成
-- ✅ 领取奖励
-- ✅ 通知归属校验
-
-无任何问题发现。
+- [x] TypeScript 类型检查通过 (npm run check 退出码 0)
+- [x] 好友邀请流程实跑验证通过
+- [x] 发起互助任务流程实跑验证通过
+- [x] 接受互助请求流程实跑验证通过
+- [x] money_gifted 赠币完成流程实跑验证通过
+- [x] 领取奖励流程实跑验证通过
+- [x] 拒绝互助请求流程实跑验证通过
+- [x] 全部通知归属校验通过（7 条通知 fromPlayerId 均正确）
+- [x] 活动记录校验通过（6 条活动记录均正确）

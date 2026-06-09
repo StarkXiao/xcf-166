@@ -1,0 +1,250 @@
+{
+  "verificationTime": "2026/6/8 23:53:49",
+  "browser": "Chromium (Playwright)",
+  "steps": {
+    "step1": {
+      "screenshot": "01_initial_page.png",
+      "localStorageCleared": true,
+      "tutorialClosed": true,
+      "initialMoney": 2000,
+      "initialFriendCount": 4
+    },
+    "step2": {
+      "screenshot": "02_friend_page_initial.png",
+      "friendCount": 4,
+      "pendingTaskCount": 1
+    },
+    "step3": {
+      "screenshot": "03_accept_task.png",
+      "acceptClicked": true,
+      "oldStatus": "requested",
+      "newStatus": "in_progress",
+      "notifications": [
+        {
+          "type": "help_needed",
+          "fromPlayerName": "遗物猎人小李",
+          "message": "请向 遗物猎人小李 赠送 1000 金币完成互助"
+        },
+        {
+          "type": "task_accepted",
+          "fromPlayerName": "遗物猎人小李",
+          "message": "你接受了 遗物猎人小李 的「资金拆借」互助请求"
+        }
+      ],
+      "notificationPerspectiveCorrect": true,
+      "acceptResult": {
+        "success": true,
+        "debug": {
+          "taskProgressId": "task_mq5e4j4g_151xjq",
+          "taskHelperId": "apprentice",
+          "storePlayerId": "apprentice",
+          "taskStatus": "requested",
+          "match": true
+        },
+        "newStatus": "in_progress"
+      }
+    },
+    "step4": {
+      "screenshot": "04_gift_money.png",
+      "moneyBefore": 2000,
+      "moneyAfter": 1000,
+      "moneyChange": -1000,
+      "moneyChangeCorrect": true,
+      "oldStatus": "in_progress",
+      "newStatus": "completed",
+      "progress": 1000,
+      "target": 1000,
+      "notifications": [
+        {
+          "type": "reward_available",
+          "fromPlayerName": "遗物猎人小李",
+          "message": "与 遗物猎人小李 的「资金拆借」奖励已准备好"
+        },
+        {
+          "type": "task_completed",
+          "fromPlayerName": "遗物猎人小李",
+          "message": "与 遗物猎人小李 的「资金拆借」已完成，快去领取奖励吧！"
+        }
+      ],
+      "notificationPerspectiveCorrect": true,
+      "giftResult": {
+        "success": true,
+        "moneyBefore": 2000,
+        "moneyAfter": 1000,
+        "taskStatus": "completed",
+        "progress": 1000,
+        "helperProgress": 1000
+      }
+    },
+    "step5": {
+      "screenshot": "05_claim_reward.png",
+      "claimClicked": true,
+      "oldStatus": "completed",
+      "newStatus": "claimed",
+      "rewards": [
+        "称号「仗义疏财」",
+        "友谊经验 50"
+      ],
+      "expBefore": 150,
+      "expAfter": 200,
+      "expChange": 50,
+      "expChangeCorrect": true,
+      "notifications": []
+    },
+    "step6": {
+      "screenshot": "06_send_request.png",
+      "selectedFriend": "守夜人老张",
+      "selectedTask": "订单援助",
+      "sendClicked": true,
+      "taskStatus": "requested",
+      "notifications": [
+        {
+          "type": "task_request",
+          "fromPlayerName": "守夜人老张",
+          "message": "你向 守夜人老张 发起了「订单援助」互助请求"
+        }
+      ],
+      "notificationPerspectiveCorrect": true
+    },
+    "step7": {
+      "screenshot": "07_reject_request.png",
+      "taskName": "心灵慰藉",
+      "initiatorName": "殡仪馆学徒",
+      "rejectClicked": true,
+      "oldStatus": "requested",
+      "newStatus": "rejected",
+      "notifications": [
+        {
+          "type": "task_rejected",
+          "fromPlayerName": "殡仪馆学徒",
+          "message": "你拒绝了 殡仪馆学徒 的「心灵慰藉」互助请求"
+        }
+      ],
+      "notificationPerspectiveCorrect": true
+    },
+    "step8": {
+      "screenshot": "08_notifications.png",
+      "totalCount": 8,
+      "verifications": [
+        {
+          "index": 1,
+          "type": "task_rejected",
+          "fromPlayerName": "殡仪馆学徒",
+          "message": "你拒绝了 殡仪馆学徒 的「心灵慰藉」互助请求",
+          "correct": true
+        },
+        {
+          "index": 2,
+          "type": "task_request",
+          "fromPlayerName": "守夜人老张",
+          "message": "你向 守夜人老张 发起了「订单援助」互助请求",
+          "correct": true
+        },
+        {
+          "index": 3,
+          "type": "reward_available",
+          "fromPlayerName": "遗物猎人小李",
+          "message": "与 遗物猎人小李 的「资金拆借」奖励已准备好",
+          "correct": true
+        },
+        {
+          "index": 4,
+          "type": "task_completed",
+          "fromPlayerName": "遗物猎人小李",
+          "message": "与 遗物猎人小李 的「资金拆借」已完成，快去领取奖励吧！",
+          "correct": true
+        },
+        {
+          "index": 5,
+          "type": "help_needed",
+          "fromPlayerName": "遗物猎人小李",
+          "message": "请向 遗物猎人小李 赠送 1000 金币完成互助",
+          "correct": true
+        },
+        {
+          "index": 6,
+          "type": "task_accepted",
+          "fromPlayerName": "遗物猎人小李",
+          "message": "你接受了 遗物猎人小李 的「资金拆借」互助请求",
+          "correct": true
+        },
+        {
+          "index": 7,
+          "type": "task_request",
+          "fromPlayerName": "遗物猎人小李",
+          "message": "遗物猎人小李 邀请你协助「资金拆借」",
+          "correct": true
+        },
+        {
+          "index": 8,
+          "type": "invite",
+          "fromPlayerName": "安静的守护者",
+          "message": "安静的守护者 想加你为好友",
+          "correct": true
+        }
+      ],
+      "allCorrect": true
+    },
+    "step9": {
+      "screenshot": "09_activities.png",
+      "totalCount": 6,
+      "activities": [
+        {
+          "index": 1,
+          "type": "help_received",
+          "description": "拒绝了 殡仪馆学徒 的「心灵慰藉」互助请求",
+          "correct": true
+        },
+        {
+          "index": 2,
+          "type": "help_sent",
+          "description": "向 守夜人老张 发起了「订单援助」互助请求",
+          "correct": true
+        },
+        {
+          "index": 3,
+          "type": "reward_claimed",
+          "description": "领取了「资金拆借」的奖励",
+          "correct": true
+        },
+        {
+          "index": 4,
+          "type": "task_completed",
+          "description": "互助任务「资金拆借」已完成",
+          "correct": true
+        },
+        {
+          "index": 5,
+          "type": "money_gifted",
+          "description": "向 遗物猎人小李 赠送了 1000 金币，完成「资金拆借」互助",
+          "correct": true
+        },
+        {
+          "index": 6,
+          "type": "help_received",
+          "description": "接受了 遗物猎人小李 的「资金拆借」互助请求",
+          "correct": true
+        }
+      ],
+      "allCorrect": true
+    }
+  },
+  "summary": {
+    "money": {
+      "initial": 2000,
+      "final": 2000,
+      "change": 0,
+      "correct": false
+    },
+    "friendshipExp": {
+      "initial": 150,
+      "final": 200,
+      "change": 50,
+      "correct": true
+    },
+    "statusFlow": {
+      "description": "requested → in_progress → completed → claimed",
+      "correct": true
+    }
+  }
+}
