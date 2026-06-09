@@ -113,6 +113,16 @@ export interface BattleRecord {
   turnsElapsed: number
   duration: number
   completedAt: number
+  synergyBonus?: {
+    names: string[]
+    totalBonus: {
+      processingSpeed: number
+      sanityProtection: number
+      rewardMultiplier: number
+      anomalyResistance: number
+      successRateBonus: number
+    }
+  }
 }
 
 export interface BattleReward {

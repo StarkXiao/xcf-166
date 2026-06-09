@@ -7,11 +7,14 @@ import type {
   CharacterSaveData,
   AttributeType,
   ActiveBuff,
-  BuffType
+  BuffType,
+  ActiveSynergy
 } from '../game/characterTypes'
 import { getAllCharacters, getExpForLevel, getAttributeGainPerLevel } from '../game/data/characters'
+import { synergyRules } from '../game/data/synergies'
 import { useGameStore } from './gameStore'
 import { useAchievementStore } from './achievementStore'
+import { useShopStore } from './shopStore'
 
 const SAVE_VERSION = '1.1.0'
 
@@ -55,6 +58,142 @@ export const useCharacterStore = defineStore('character', () => {
 
   const hasPerfectComplete = computed(() => {
     return pendingPerfectComplete.value
+  })
+
+  const activeSynergies = computed((): ActiveSynergy[] => {
+    const result: ActiveSynergy[] = []
+    const unlockedIds = new Set(
+      characters.value.filter(c => c.unlocked).map(c => c.id)
+    )
+    const activeId = activeCharacterId.value
+    let inventoryItemCount = 0
+    const inventoryItemIds = new Set<string>()
+    try {
+      const shopStore = useShopStore()
+      for (const item of shopStore.inventory) {
+        inventoryItemCount += item.quantity
+        inventoryItemIds.add(item.itemId)
+      }
+    } catch {}
+
+    const unlockedSkillIds = new Set<string>()
+    characters.value.forEach(c => {
+      if (c.unlocked) {
+        c.skills.forEach(s => {
+          if (s.unlocked && s.level > 0) {
+            unlockedSkillIds.add(s.id)
+          }
+        })
+      }
+    })
+
+    for (const rule of synergyRules) {
+      let activated = false
+      let sourceDesc = ''
+
+      switch (rule.activationMode) {
+        case 'character_pair': {
+          const required = rule.requiredCharacterIds || []
+          if (required.every(id => unlockedIds.has(id))) {
+            activated = true
+            const names = required
+              .map(id => characters.value.find(c => c.id === id)?.name || id)
+              .join(' + ')
+            sourceDesc = `角色组合：${names}`
+          }
+          break
+        }
+        case 'character_item': {
+          const requiredChars = rule.requiredCharacterIds || []
+          if (activeId && requiredChars.includes(activeId)) {
+            const count = rule.requiredItemCount || 0
+            if (count <= inventoryItemCount) {
+              activated = true
+              const charName = characters.value.find(c => c.id === activeId)?.name || activeId
+              sourceDesc = `${charName} + ${count}件材料`
+            }
+          }
+          break
+        }
+        case 'item_set': {
+          const requiredItems = rule.requiredItemIds || []
+          let allFound = true
+          for (const itemId of requiredItems) {
+            let found = false
+            try {
+              const shopStore = useShopStore()
+              found = shopStore.inventory.some(i => i.itemId === itemId && i.quantity > 0)
+            } catch {}
+            if (!found) {
+              allFound = false
+              break
+            }
+          }
+          if (allFound) {
+            activated = true
+            sourceDesc = `物品套装：${requiredItems.length}件组合`
+          }
+          break
+        }
+        case 'skill_combo': {
+          const requiredSkills = rule.requiredSkillIds || []
+          const requiredChars = rule.requiredCharacterIds || []
+          if (requiredChars.every(id => unlockedIds.has(id)) &&
+              requiredSkills.every(id => unlockedSkillIds.has(id))) {
+            activated = true
+            sourceDesc = `技能联动：${requiredSkills.length}个技能`
+          }
+          break
+        }
+      }
+
+      if (activated) {
+        result.push({
+          ruleId: rule.id,
+          name: rule.name,
+          icon: rule.icon,
+          rarity: rule.rarity,
+          effect: rule.effect,
+          sourceDescription: sourceDesc
+        })
+      }
+    }
+
+    return result
+  })
+
+  const synergyCombatBonus = computed((): CombatBonus => {
+    const bonus: CombatBonus = {
+      processingSpeed: 0,
+      sanityProtection: 0,
+      rewardMultiplier: 0,
+      anomalyResistance: 0,
+      successRateBonus: 0
+    }
+    for (const synergy of activeSynergies.value) {
+      const cb = synergy.effect.combatBonus
+      if (cb) {
+        bonus.processingSpeed += cb.processingSpeed || 0
+        bonus.sanityProtection += cb.sanityProtection || 0
+        bonus.rewardMultiplier += cb.rewardMultiplier || 0
+        bonus.anomalyResistance += cb.anomalyResistance || 0
+        bonus.successRateBonus += cb.successRateBonus || 0
+      }
+    }
+    return bonus
+  })
+
+  const synergyAttributeBonus = computed((): Partial<Record<AttributeType, number>> => {
+    const result: Partial<Record<AttributeType, number>> = {}
+    for (const synergy of activeSynergies.value) {
+      const ab = synergy.effect.attributeBonus
+      if (ab) {
+        for (const key of Object.keys(ab) as AttributeType[]) {
+          result[key] = (result[key] || 0) + (ab[key] || 0)
+        }
+      }
+    }
+    return result
   })
 
   const totalCombatBonus = computed((): CombatBonus => {
@@ -142,6 +281,13 @@ export const useCharacterStore = defineStore('character', () => {
           break
       }
     })
+
+    const sBonus = synergyCombatBonus.value
+    bonus.processingSpeed += sBonus.processingSpeed
+    bonus.sanityProtection += sBonus.sanityProtection
+    bonus.rewardMultiplier += sBonus.rewardMultiplier
+    bonus.anomalyResistance += sBonus.anomalyResistance
+    bonus.successRateBonus += sBonus.successRateBonus
 
     if (doubleAllRemainingDays.value > 0) {
       bonus.processingSpeed *= 2
@@ -692,6 +838,9 @@ export const useCharacterStore = defineStore('character', () => {
     totalExp,
     totalSpent,
     totalCombatBonus,
+    activeSynergies,
+    synergyCombatBonus,
+    synergyAttributeBonus,
     getAttributeValue,
     addBuff,
     removeBuff,

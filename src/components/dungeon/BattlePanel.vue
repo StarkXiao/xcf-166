@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useDungeonStore } from '@/stores/dungeonStore'
+import { useCharacterStore } from '@/stores/characterStore'
 import { getDungeonById, getStageById } from '@/game/data/dungeons'
 import type { BattleRecord, BattleReward } from '@/types/dungeon'
-import { Swords, Star, Package, Coins, X, RotateCcw } from 'lucide-vue-next'
+import { Swords, Star, Package, Coins, X, RotateCcw, Link2 } from 'lucide-vue-next'
 
 const props = defineProps<{
   dungeonId: string
@@ -16,6 +17,18 @@ const emit = defineEmits<{
 }>()
 
 const dungeonStore = useDungeonStore()
+const characterStore = useCharacterStore()
+
+const synergyPreviewParts = computed(() => {
+  const bonuses = characterStore.synergyCombatBonus
+  const parts: string[] = []
+  if (bonuses.processingSpeed > 0) parts.push(`处理速度+${bonuses.processingSpeed}%`)
+  if (bonuses.sanityProtection > 0) parts.push(`理智保护+${bonuses.sanityProtection}%`)
+  if (bonuses.rewardMultiplier > 0) parts.push(`奖励加成+${bonuses.rewardMultiplier}%`)
+  if (bonuses.anomalyResistance > 0) parts.push(`异常抵抗+${bonuses.anomalyResistance}%`)
+  if (bonuses.successRateBonus > 0) parts.push(`成功率+${bonuses.successRateBonus}%`)
+  return parts
+})
 
 const dungeon = computed(() => getDungeonById(props.dungeonId))
 const stage = computed(() => getStageById(props.dungeonId, props.stageId))
@@ -97,6 +110,22 @@ function handleRetryFromResult() {
           <div class="p-4 rounded-xl bg-gray-900/60 border border-gray-700/50 text-center">
             <div class="text-sm text-gray-500 mb-1">战斗回合</div>
             <div class="text-2xl font-bold text-purple-400">{{ battleResult.turnsElapsed }}</div>
+          </div>
+        </div>
+
+        <div v-if="battleResult.synergyBonus && battleResult.synergyBonus.names.length > 0" class="mb-6 p-3 rounded-xl bg-gradient-to-r from-green-900/30 to-emerald-900/30 border border-green-500/30">
+          <h4 class="text-sm font-bold text-green-400 mb-2 flex items-center gap-2">
+            <Link2 class="w-4 h-4" />
+            组合加成生效
+          </h4>
+          <div class="flex flex-wrap gap-2">
+            <span
+              v-for="name in battleResult.synergyBonus.names"
+              :key="name"
+              class="px-2 py-1 bg-green-900/50 rounded text-xs text-green-300 border border-green-500/20"
+            >
+              {{ name }}
+            </span>
           </div>
         </div>
 
@@ -233,6 +262,25 @@ function handleRetryFromResult() {
           <div class="p-3 rounded-xl bg-gray-800/50 border border-gray-700/50 text-center">
             <div class="text-xs text-gray-500 mb-1">时间限制</div>
             <div class="text-lg font-bold text-amber-400">{{ stage.timeLimit }}秒</div>
+          </div>
+        </div>
+
+        <div v-if="characterStore.activeSynergies.length > 0" class="mb-6 p-3 rounded-xl bg-gradient-to-r from-green-900/30 to-emerald-900/30 border border-green-500/30">
+          <h4 class="text-sm font-bold text-green-400 mb-2 flex items-center gap-2">
+            <Link2 class="w-4 h-4" />
+            组合加成预览
+          </h4>
+          <div class="flex flex-wrap gap-2 mb-2">
+            <span
+              v-for="syn in characterStore.activeSynergies"
+              :key="syn.ruleId"
+              class="px-2 py-1 bg-green-900/50 rounded text-xs text-green-300 border border-green-500/20"
+            >
+              {{ syn.icon }} {{ syn.name }}
+            </span>
+          </div>
+          <div v-if="synergyPreviewParts.length > 0" class="flex flex-wrap gap-2 text-xs">
+            <span v-for="(part, idx) in synergyPreviewParts" :key="idx" class="text-emerald-400">{{ part }}</span>
           </div>
         </div>
 

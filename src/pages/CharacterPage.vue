@@ -5,16 +5,19 @@ import { useCharacterStore } from '@/stores/characterStore'
 import { useGameStore } from '@/stores/gameStore'
 import { useAchievementStore } from '@/stores/achievementStore'
 import { useSeasonStore } from '@/stores/seasonStore'
+import { useShopStore } from '@/stores/shopStore'
 import { audioManager } from '@/game/audio'
 import type { Character, CharacterSkill } from '@/game/characterTypes'
+import { synergyRules } from '@/game/data/synergies'
 import BadgeDisplay from '@/components/achievement/BadgeDisplay.vue'
-import { Trophy, Medal, Crown, Sparkles } from 'lucide-vue-next'
+import { Trophy, Medal, Crown, Sparkles, Link2, Eye } from 'lucide-vue-next'
 
 const router = useRouter()
 const characterStore = useCharacterStore()
 const gameStore = useGameStore()
 const achievementStore = useAchievementStore()
 const seasonStore = useSeasonStore()
+const shopStore = useShopStore()
 
 const selectedCharacterId = ref<string | null>(characterStore.activeCharacterId)
 const showLevelUpAnimation = ref(false)
@@ -22,7 +25,8 @@ const levelUpMessage = ref('')
 const showSkillResult = ref(false)
 const skillResultMessage = ref('')
 const selectedSkillType = ref<'all' | 'passive' | 'active' | 'combat'>('all')
-const activeProfileTab = ref<'skills' | 'achievements'>('skills')
+const activeProfileTab = ref<'skills' | 'achievements' | 'synergies'>('skills')
+const expandedSynergyId = ref<string | null>(null)
 
 onMounted(() => {
   seasonStore.initSeason()
@@ -71,6 +75,107 @@ const filteredSkills = computed(() => {
   if (selectedSkillType.value === 'all') return selectedCharacter.value.skills
   return selectedCharacter.value.skills.filter(s => s.type === selectedSkillType.value)
 })
+
+const synergyRarityColors: Record<string, string> = {
+  common: 'from-gray-600 to-gray-700 border-gray-500',
+  rare: 'from-blue-600 to-blue-700 border-blue-400',
+  epic: 'from-purple-600 to-purple-700 border-purple-400',
+  legendary: 'from-amber-500 to-orange-600 border-amber-400'
+}
+
+const synergyRarityNames: Record<string, string> = {
+  common: '普通',
+  rare: '稀有',
+  epic: '史诗',
+  legendary: '传说'
+}
+
+const relatedSynergies = computed(() => {
+  if (!selectedCharacter.value) return []
+  const charId = selectedCharacter.value.id
+  return synergyRules.filter(rule => {
+    if (rule.requiredCharacterIds?.includes(charId)) return true
+    return false
+  })
+})
+
+const activatedSynergyIds = computed(() => {
+  return new Set(characterStore.activeSynergies.map(s => s.ruleId))
+})
+
+const synergyPreviewText = computed(() => {
+  const bonuses = characterStore.synergyCombatBonus
+  const parts: string[] = []
+  if (bonuses.processingSpeed > 0) parts.push(`处理速度+${bonuses.processingSpeed}%`)
+  if (bonuses.sanityProtection > 0) parts.push(`理智保护+${bonuses.sanityProtection}%`)
+  if (bonuses.rewardMultiplier > 0) parts.push(`奖励加成+${bonuses.rewardMultiplier}%`)
+  if (bonuses.anomalyResistance > 0) parts.push(`异常抵抗+${bonuses.anomalyResistance}%`)
+  if (bonuses.successRateBonus > 0) parts.push(`成功率+${bonuses.successRateBonus}%`)
+  const attrBonuses = characterStore.synergyAttributeBonus
+  for (const [key, val] of Object.entries(attrBonuses)) {
+    if (val && val > 0) {
+      const attrNames: Record<string, string> = { sanity: '理智', reputation: '声望', money: '财运', efficiency: '效率', luck: '幸运' }
+      parts.push(`${attrNames[key] || key}+${val}`)
+    }
+  }
+  return parts
+})
+
+function getSynergyProgress(rule: typeof synergyRules[0]): { current: number; total: number; description: string } {
+  switch (rule.activationMode) {
+    case 'character_pair': {
+      const required = rule.requiredCharacterIds || []
+      const unlocked = required.filter(id => characterStore.characters.find(c => c.id === id)?.unlocked)
+      return {
+        current: unlocked.length,
+        total: required.length,
+        description: `已解锁 ${unlocked.length}/${required.length} 个角色`
+      }
+    }
+    case 'character_item': {
+      const itemCount = shopStore.inventory.reduce((sum, i) => sum + i.quantity, 0)
+      const needed = rule.requiredItemCount || 0
+      return {
+        current: Math.min(itemCount, needed),
+        total: needed,
+        description: `持有 ${itemCount}/${needed} 件材料`
+      }
+    }
+    case 'item_set': {
+      const requiredItems = rule.requiredItemIds || []
+      let found = 0
+      for (const itemId of requiredItems) {
+        if (shopStore.inventory.some(i => i.itemId === itemId && i.quantity > 0)) found++
+      }
+      return {
+        current: found,
+        total: requiredItems.length,
+        description: `拥有 ${found}/${requiredItems.length} 件套装物品`
+      }
+    }
+    case 'skill_combo': {
+      const requiredSkills = rule.requiredSkillIds || []
+      const unlocked = requiredSkills.filter(id => {
+        for (const c of characterStore.characters) {
+          const sk = c.skills.find(s => s.id === id)
+          if (sk && sk.unlocked && sk.level > 0) return true
+        }
+        return false
+      })
+      return {
+        current: unlocked.length,
+        total: requiredSkills.length,
+        description: `已激活 ${unlocked.length}/${requiredSkills.length} 个技能`
+      }
+    }
+    default:
+      return { current: 0, total: 1, description: '' }
+  }
+}
+
+function toggleSynergyExpand(ruleId: string) {
+  expandedSynergyId.value = expandedSynergyId.value === ruleId ? null : ruleId
+}
 
 function goBack() {
   audioManager.playClick()
@@ -434,23 +539,49 @@ function getUnlockProgress(char: Character): number {
               <div class="space-y-3">
                 <div class="flex justify-between items-center p-3 bg-gray-800/50 rounded-lg">
                   <span class="text-gray-400">处理速度</span>
-                  <span class="text-green-400 font-bold">+{{ characterStore.totalCombatBonus.processingSpeed }}%</span>
+                  <div class="flex items-center gap-2">
+                    <span class="text-green-400 font-bold">+{{ characterStore.totalCombatBonus.processingSpeed }}%</span>
+                    <span v-if="characterStore.synergyCombatBonus.processingSpeed > 0" class="text-xs text-green-500/80 bg-green-900/30 px-1.5 py-0.5 rounded">含组合+{{ characterStore.synergyCombatBonus.processingSpeed }}%</span>
+                  </div>
                 </div>
                 <div class="flex justify-between items-center p-3 bg-gray-800/50 rounded-lg">
                   <span class="text-gray-400">理智保护</span>
-                  <span class="text-blue-400 font-bold">+{{ characterStore.totalCombatBonus.sanityProtection }}%</span>
+                  <div class="flex items-center gap-2">
+                    <span class="text-blue-400 font-bold">+{{ characterStore.totalCombatBonus.sanityProtection }}%</span>
+                    <span v-if="characterStore.synergyCombatBonus.sanityProtection > 0" class="text-xs text-blue-500/80 bg-blue-900/30 px-1.5 py-0.5 rounded">含组合+{{ characterStore.synergyCombatBonus.sanityProtection }}%</span>
+                  </div>
                 </div>
                 <div class="flex justify-between items-center p-3 bg-gray-800/50 rounded-lg">
                   <span class="text-gray-400">奖励加成</span>
-                  <span class="text-yellow-400 font-bold">+{{ characterStore.totalCombatBonus.rewardMultiplier }}%</span>
+                  <div class="flex items-center gap-2">
+                    <span class="text-yellow-400 font-bold">+{{ characterStore.totalCombatBonus.rewardMultiplier }}%</span>
+                    <span v-if="characterStore.synergyCombatBonus.rewardMultiplier > 0" class="text-xs text-yellow-500/80 bg-yellow-900/30 px-1.5 py-0.5 rounded">含组合+{{ characterStore.synergyCombatBonus.rewardMultiplier }}%</span>
+                  </div>
                 </div>
                 <div class="flex justify-between items-center p-3 bg-gray-800/50 rounded-lg">
                   <span class="text-gray-400">异常抵抗</span>
-                  <span class="text-purple-400 font-bold">+{{ characterStore.totalCombatBonus.anomalyResistance }}%</span>
+                  <div class="flex items-center gap-2">
+                    <span class="text-purple-400 font-bold">+{{ characterStore.totalCombatBonus.anomalyResistance }}%</span>
+                    <span v-if="characterStore.synergyCombatBonus.anomalyResistance > 0" class="text-xs text-purple-500/80 bg-purple-900/30 px-1.5 py-0.5 rounded">含组合+{{ characterStore.synergyCombatBonus.anomalyResistance }}%</span>
+                  </div>
                 </div>
                 <div class="flex justify-between items-center p-3 bg-gray-800/50 rounded-lg">
                   <span class="text-gray-400">成功率</span>
-                  <span class="text-emerald-400 font-bold">+{{ characterStore.totalCombatBonus.successRateBonus }}%</span>
+                  <div class="flex items-center gap-2">
+                    <span class="text-emerald-400 font-bold">+{{ characterStore.totalCombatBonus.successRateBonus }}%</span>
+                    <span v-if="characterStore.synergyCombatBonus.successRateBonus > 0" class="text-xs text-emerald-500/80 bg-emerald-900/30 px-1.5 py-0.5 rounded">含组合+{{ characterStore.synergyCombatBonus.successRateBonus }}%</span>
+                  </div>
+                </div>
+              </div>
+              <div v-if="characterStore.activeSynergies.length > 0" class="mt-4 p-3 rounded-xl bg-gradient-to-r from-green-900/20 to-emerald-900/20 border border-green-500/20">
+                <div class="flex items-center gap-2 mb-2">
+                  <Link2 class="w-4 h-4 text-green-400" />
+                  <span class="text-xs font-bold text-green-400">组合加成贡献</span>
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                  <span v-for="syn in characterStore.activeSynergies" :key="syn.ruleId" class="text-xs px-2 py-0.5 bg-green-900/40 text-green-300 rounded border border-green-500/10">
+                    {{ syn.icon }} {{ syn.name }}
+                  </span>
                 </div>
               </div>
             </div>
@@ -468,6 +599,24 @@ function getUnlockProgress(char: Character): number {
                 <span class="flex items-center justify-center gap-2">
                   <Sparkles class="w-5 h-5" />
                   技能养成
+                </span>
+              </button>
+              <button
+                @click="activeProfileTab = 'synergies'"
+                class="flex-1 py-4 px-6 text-center font-medium transition-colors relative"
+                :class="activeProfileTab === 'synergies'
+                  ? 'text-amber-400 bg-amber-500/10 border-b-2 border-amber-400'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'"
+              >
+                <span class="flex items-center justify-center gap-2">
+                  <Link2 class="w-5 h-5" />
+                  组合加成
+                </span>
+                <span
+                  v-if="characterStore.activeSynergies.length > 0"
+                  class="absolute top-2 right-4 w-5 h-5 bg-green-500 text-white text-xs rounded-full flex items-center justify-center"
+                >
+                  {{ characterStore.activeSynergies.length }}
                 </span>
               </button>
               <button
@@ -582,6 +731,146 @@ function getUnlockProgress(char: Character): number {
                 </div>
               </div>
             </div>
+            </div>
+
+            <div v-show="activeProfileTab === 'synergies'" class="p-6">
+              <div class="flex items-center justify-between mb-6">
+                <h3 class="text-lg font-bold text-amber-400">🔗 组合加成</h3>
+                <div v-if="characterStore.activeSynergies.length > 0" class="text-sm text-green-400">
+                  已激活 {{ characterStore.activeSynergies.length }} 项
+                </div>
+              </div>
+
+              <div v-if="synergyPreviewText.length > 0" class="mb-6 p-4 rounded-xl bg-gradient-to-r from-green-900/30 to-emerald-900/30 border border-green-500/30">
+                <h4 class="text-sm font-bold text-green-400 mb-2 flex items-center gap-2">
+                  <Eye class="w-4 h-4" />
+                  数值预览
+                </h4>
+                <div class="flex flex-wrap gap-2">
+                  <span
+                    v-for="(text, idx) in synergyPreviewText"
+                    :key="idx"
+                    class="px-3 py-1 bg-green-900/50 rounded-lg text-sm text-green-300 border border-green-500/20"
+                  >
+                    {{ text }}
+                  </span>
+                </div>
+              </div>
+
+              <div v-if="characterStore.activeSynergies.length > 0" class="mb-6">
+                <h4 class="text-md font-bold text-green-400 mb-3">✅ 已激活</h4>
+                <div class="space-y-3">
+                  <div
+                    v-for="synergy in characterStore.activeSynergies"
+                    :key="synergy.ruleId"
+                    class="p-4 rounded-xl border transition-all cursor-pointer"
+                    :class="[
+                      expandedSynergyId === synergy.ruleId ? 'ring-2 ring-green-500/50' : '',
+                      synergy.rarity === 'common' ? 'bg-gray-800/50 border-gray-600' : '',
+                      synergy.rarity === 'rare' ? 'bg-blue-900/20 border-blue-600/50' : '',
+                      synergy.rarity === 'epic' ? 'bg-purple-900/20 border-purple-600/50' : '',
+                      synergy.rarity === 'legendary' ? 'bg-amber-900/20 border-amber-600/50' : ''
+                    ]"
+                    @click="toggleSynergyExpand(synergy.ruleId)"
+                  >
+                    <div class="flex items-center gap-3">
+                      <div class="w-10 h-10 rounded-lg flex items-center justify-center text-xl bg-green-800/50 border border-green-500/50">
+                        {{ synergy.icon }}
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="font-bold text-white">{{ synergy.name }}</span>
+                          <span
+                            class="text-xs px-2 py-0.5 rounded"
+                            :class="{
+                              'bg-gray-700 text-gray-300': synergy.rarity === 'common',
+                              'bg-blue-900 text-blue-300': synergy.rarity === 'rare',
+                              'bg-purple-900 text-purple-300': synergy.rarity === 'epic',
+                              'bg-amber-900 text-amber-300': synergy.rarity === 'legendary'
+                            }"
+                          >
+                            {{ synergyRarityNames[synergy.rarity] }}
+                          </span>
+                          <span class="text-xs px-2 py-0.5 bg-green-800 text-green-300 rounded">激活</span>
+                        </div>
+                        <p class="text-sm text-gray-400 mt-1">{{ synergy.effect.description }}</p>
+                      </div>
+                    </div>
+                    <div v-if="expandedSynergyId === synergy.ruleId" class="mt-3 pt-3 border-t border-gray-700/50">
+                      <p class="text-xs text-gray-500 mb-2">来源：{{ synergy.sourceDescription }}</p>
+                      <div v-if="synergy.effect.combatBonus" class="flex flex-wrap gap-2">
+                        <span v-if="synergy.effect.combatBonus.processingSpeed" class="text-xs px-2 py-1 bg-green-900/30 text-green-400 rounded">处理速度+{{ synergy.effect.combatBonus.processingSpeed }}%</span>
+                        <span v-if="synergy.effect.combatBonus.sanityProtection" class="text-xs px-2 py-1 bg-blue-900/30 text-blue-400 rounded">理智保护+{{ synergy.effect.combatBonus.sanityProtection }}%</span>
+                        <span v-if="synergy.effect.combatBonus.rewardMultiplier" class="text-xs px-2 py-1 bg-yellow-900/30 text-yellow-400 rounded">奖励加成+{{ synergy.effect.combatBonus.rewardMultiplier }}%</span>
+                        <span v-if="synergy.effect.combatBonus.anomalyResistance" class="text-xs px-2 py-1 bg-purple-900/30 text-purple-400 rounded">异常抵抗+{{ synergy.effect.combatBonus.anomalyResistance }}%</span>
+                        <span v-if="synergy.effect.combatBonus.successRateBonus" class="text-xs px-2 py-1 bg-emerald-900/30 text-emerald-400 rounded">成功率+{{ synergy.effect.combatBonus.successRateBonus }}%</span>
+                      </div>
+                      <div v-if="synergy.effect.attributeBonus" class="flex flex-wrap gap-2 mt-1">
+                        <span v-for="(val, key) in synergy.effect.attributeBonus" :key="key" class="text-xs px-2 py-1 bg-amber-900/30 text-amber-400 rounded">
+                          {{ {sanity:'理智',reputation:'声望',money:'财运',efficiency:'效率',luck:'幸运'}[key] || key }}+{{ val }}
+                        </span>
+                      </div>
+                      <p v-if="synergy.effect.specialEffect" class="text-xs text-orange-400 mt-2">特殊效果：{{ synergy.effect.specialEffect }}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="relatedSynergies.filter(r => !activatedSynergyIds.has(r.id)).length > 0">
+                <h4 class="text-md font-bold text-gray-400 mb-3">🔒 可解锁组合</h4>
+                <div class="space-y-3">
+                  <div
+                    v-for="rule in relatedSynergies.filter(r => !activatedSynergyIds.has(r.id))"
+                    :key="rule.id"
+                    class="p-4 rounded-xl border border-gray-700/50 bg-gray-800/30 opacity-70 hover:opacity-90 transition-opacity cursor-pointer"
+                    @click="toggleSynergyExpand(rule.id)"
+                  >
+                    <div class="flex items-center gap-3">
+                      <div class="w-10 h-10 rounded-lg flex items-center justify-center text-xl bg-gray-700/50">
+                        {{ rule.icon }}
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="font-bold text-gray-300">{{ rule.name }}</span>
+                          <span
+                            class="text-xs px-2 py-0.5 rounded"
+                            :class="{
+                              'bg-gray-700 text-gray-400': rule.rarity === 'common',
+                              'bg-blue-900/50 text-blue-400': rule.rarity === 'rare',
+                              'bg-purple-900/50 text-purple-400': rule.rarity === 'epic',
+                              'bg-amber-900/50 text-amber-400': rule.rarity === 'legendary'
+                            }"
+                          >
+                            {{ synergyRarityNames[rule.rarity] }}
+                          </span>
+                        </div>
+                        <p class="text-sm text-gray-500 mt-1">{{ rule.description }}</p>
+                        <div class="mt-2">
+                          <div class="flex items-center gap-2 text-xs text-gray-500">
+                            <span>{{ getSynergyProgress(rule).description }}</span>
+                          </div>
+                          <div class="h-1.5 bg-gray-700 rounded-full overflow-hidden mt-1 max-w-xs">
+                            <div
+                              class="h-full bg-gradient-to-r from-gray-500 to-gray-400 transition-all"
+                              :style="{ width: `${getSynergyProgress(rule).total > 0 ? (getSynergyProgress(rule).current / getSynergyProgress(rule).total) * 100 : 0}%` }"
+                            ></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div v-if="expandedSynergyId === rule.id" class="mt-3 pt-3 border-t border-gray-700/50">
+                      <p class="text-xs text-gray-400 mb-2">激活后效果：</p>
+                      <p class="text-sm text-green-400">{{ rule.effect.description }}</p>
+                      <p class="text-xs text-gray-500 mt-2 italic">{{ rule.lore }}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="relatedSynergies.length === 0" class="text-center py-8">
+                <div class="text-4xl mb-3">🔗</div>
+                <p class="text-gray-500">当前角色暂无关联组合加成</p>
+              </div>
             </div>
 
             <div v-show="activeProfileTab === 'achievements'" class="p-6">

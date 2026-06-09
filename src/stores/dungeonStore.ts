@@ -14,6 +14,7 @@ import type {
 import { dungeons, getDungeonById, getStageById } from '@/game/data/dungeons'
 import { useGameStore } from './gameStore'
 import { useMailStore } from './mailStore'
+import { useCharacterStore } from './characterStore'
 
 const STORAGE_KEY = 'dungeon_center_data'
 
@@ -216,10 +217,13 @@ export const useDungeonStore = defineStore('dungeon', () => {
     if (!stage) throw new Error('Stage not found')
 
     const gameStore = useGameStore()
+    const characterStore = useCharacterStore()
+    const combatBonus = characterStore.totalCombatBonus
+
     const playerHp = gameStore.stats.sanity
     const playerMaxHp = gameStore.stats.maxSanity
-    const playerAttack = 15 + gameStore.stats.reputation * 0.3
-    const playerDefense = 5 + gameStore.stats.totalOrdersCompleted * 0.5
+    const playerAttack = (15 + gameStore.stats.reputation * 0.3) * (1 + combatBonus.processingSpeed / 100)
+    const playerDefense = (5 + gameStore.stats.totalOrdersCompleted * 0.5) * (1 + combatBonus.sanityProtection / 100)
 
     const events: BattleEvent[] = []
     let currentHp = playerHp
@@ -282,6 +286,12 @@ export const useDungeonStore = defineStore('dungeon', () => {
       else starRating = 1
     }
 
+    const activeSynergies = characterStore.activeSynergies
+    const synergyBonus = activeSynergies.length > 0 ? {
+      names: activeSynergies.map(s => s.name),
+      totalBonus: { ...characterStore.synergyCombatBonus }
+    } : undefined
+
     return {
       id: generateId(),
       dungeonId,
@@ -296,6 +306,7 @@ export const useDungeonStore = defineStore('dungeon', () => {
       turnsElapsed: turn,
       duration: turn * 5 * 1000,
       completedAt: Date.now(),
+      synergyBonus
     }
   }
 
@@ -304,8 +315,10 @@ export const useDungeonStore = defineStore('dungeon', () => {
     const stage = allStages.find((s) => s.id === stageId)
     if (!stage) return []
 
+    const characterStore = useCharacterStore()
     const rewards: BattleReward[] = []
-    const multiplier = starRating >= 3 ? 1.5 : starRating >= 2 ? 1.2 : 1.0
+    let multiplier = starRating >= 3 ? 1.5 : starRating >= 2 ? 1.2 : 1.0
+    multiplier *= 1 + characterStore.synergyCombatBonus.rewardMultiplier / 100
 
     stage.drops.forEach((drop) => {
       let shouldDrop = drop.isGuaranteed

@@ -93,6 +93,42 @@ export interface LevelUpResult {
   message: string
 }
 
+export type SynergyActivationMode = 'character_pair' | 'character_item' | 'item_set' | 'skill_combo'
+
+export type SynergyRarity = 'common' | 'rare' | 'epic' | 'legendary'
+
+export interface SynergyEffect {
+  combatBonus?: Partial<CombatBonus>
+  attributeBonus?: Partial<Record<AttributeType, number>>
+  specialEffect?: string
+  description: string
+}
+
+export interface SynergyRule {
+  id: string
+  name: string
+  description: string
+  icon: string
+  rarity: SynergyRarity
+  activationMode: SynergyActivationMode
+  requiredCharacterIds?: string[]
+  requiredItemIds?: string[]
+  requiredSkillIds?: string[]
+  requiredItemCategory?: string
+  requiredItemCount?: number
+  effect: SynergyEffect
+  lore: string
+}
+
+export interface ActiveSynergy {
+  ruleId: string
+  name: string
+  icon: string
+  rarity: SynergyRarity
+  effect: SynergyEffect
+  sourceDescription: string
+}
+
 export interface CharacterSaveData {
   characters: Array<{
     id: string
