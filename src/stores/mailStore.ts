@@ -54,7 +54,7 @@ export const useMailStore = defineStore('mail', () => {
   const announcements = ref<OperationalAnnouncement[]>([])
 
   watch(
-    [mails],
+    [mails, announcements],
     () => {
       saveAllData()
     },
@@ -195,6 +195,32 @@ export const useMailStore = defineStore('mail', () => {
 
   function removeAnnouncement(announcementId: string) {
     announcements.value = announcements.value.filter(a => a.id !== announcementId)
+    publishedAnnouncementIds.value.delete(announcementId)
+  }
+
+  function republishAnnouncement(announcementId: string): boolean {
+    const ann = announcements.value.find(a => a.id === announcementId)
+    if (!ann) return false
+
+    publishedAnnouncementIds.value.delete(ann.id)
+
+    const now = Date.now()
+    ann.startsAt = now
+    ann.expiresAt = now + 7 * 86400000
+    ann.publishedAt = now
+
+    deliverQueuedAnnouncements()
+    return true
+  }
+
+  function isAnnouncementPublished(announcementId: string): boolean {
+    return publishedAnnouncementIds.value.has(announcementId)
+  }
+
+  function isAnnouncementExpired(announcementId: string): boolean {
+    const ann = announcements.value.find(a => a.id === announcementId)
+    if (!ann) return true
+    return ann.expiresAt < Date.now()
   }
 
   function checkExpiredAttachments() {
@@ -539,6 +565,9 @@ export const useMailStore = defineStore('mail', () => {
     sendSystemMail,
     announce,
     removeAnnouncement,
+    republishAnnouncement,
+    isAnnouncementPublished,
+    isAnnouncementExpired,
     deliverQueuedAnnouncements,
     clearAllData,
     saveAllData

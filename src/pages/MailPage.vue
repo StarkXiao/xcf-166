@@ -4,6 +4,7 @@ import { useMailStore } from '@/stores/mailStore'
 import { useCharacterStore } from '@/stores/characterStore'
 import MailCenter from '@/components/mail/MailCenter.vue'
 import AnnouncementEditor from '@/components/mail/AnnouncementEditor.vue'
+import AnnouncementManager from '@/components/mail/AnnouncementManager.vue'
 import {
   Mail,
   Bell,
@@ -11,6 +12,7 @@ import {
   PackageOpen,
   ArrowLeft,
   Gift as ClaimAll,
+  Megaphone,
 } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 
@@ -58,7 +60,7 @@ function handleBatchClaimAll() {
           <AnnouncementEditor />
         </div>
 
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div class="p-4 bg-gray-800/50 backdrop-blur border border-gray-700 rounded-xl">
             <div class="flex items-center gap-3">
               <div class="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
@@ -97,6 +99,18 @@ function handleBatchClaimAll() {
 
           <div class="p-4 bg-gray-800/50 backdrop-blur border border-gray-700 rounded-xl">
             <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                <Megaphone class="w-5 h-5 text-purple-400" />
+              </div>
+              <div>
+                <div class="text-2xl font-bold text-white">{{ mailStore.announcements.length }}</div>
+                <div class="text-xs text-gray-500">运营公告</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="p-4 bg-gray-800/50 backdrop-blur border border-gray-700 rounded-xl">
+            <div class="flex items-center gap-3">
               <div class="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
                 <PackageOpen class="w-5 h-5 text-amber-400" />
               </div>
@@ -108,6 +122,8 @@ function handleBatchClaimAll() {
           </div>
         </div>
       </div>
+
+      <AnnouncementManager />
 
       <div class="bg-gray-800/30 backdrop-blur border border-gray-700 rounded-2xl p-6 min-h-[600px]">
         <MailCenter />
