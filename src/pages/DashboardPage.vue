@@ -168,7 +168,6 @@ const paymentConversionMetrics = computed(() => {
 
   const uniqueSkusPurchased = Object.keys(shopStore.purchaseHistory).length
   const totalSkus = shopStore.items.length
-  const skuPenetrationRate = totalSkus > 0 ? Math.round((uniqueSkusPurchased / totalSkus) * 100) : 0
 
   const day = gameStore.day
   const avgDailySpend = day > 0 ? Math.round(totalRevenue / day) : 0
@@ -180,6 +179,12 @@ const paymentConversionMetrics = computed(() => {
   const purchaseDates = new Set(shopBehaviorEvents.map(e => toDateKey(e.timestamp)))
   const purchaseActiveDays = purchaseDates.size
 
+  const activeDays = activeDateSet.value.size
+  const payRate = activeDays > 0 ? Math.round((purchaseActiveDays / activeDays) * 100) : 0
+
+  const loginDays = achievementStore.totalLoginDays
+  const payRateByLogin = loginDays > 0 ? Math.round((purchaseActiveDays / loginDays) * 100) : 0
+
   return {
     totalPurchases,
     totalRevenue,
@@ -187,12 +192,15 @@ const paymentConversionMetrics = computed(() => {
     inventoryCount,
     activeDiscounts,
     itemsOnSale,
-    skuPenetrationRate,
+    payRate,
+    payRateByLogin,
     discountUtilization,
     avgDailySpend,
     uniqueSkusPurchased,
     totalSkus,
     purchaseActiveDays,
+    activeDays,
+    loginDays,
     currentMoney: gameStore.stats.money,
   }
 })
@@ -242,7 +250,6 @@ const retentionMetrics = computed(() => {
 
   const sortedDates = Array.from(eventDateKeys).sort()
   const firstDate = sortedDates[0]
-  const lastDate = sortedDates[sortedDates.length - 1]
 
   let day1Retention = 0
   let day7Retention = 0
@@ -250,45 +257,29 @@ const retentionMetrics = computed(() => {
 
   if (firstDate && eventDateKeys.size > 0) {
     const first = new Date(firstDate)
-    const day1Target = new Date(first)
-    day1Target.setDate(day1Target.getDate() + 1)
-    const day1Key = toDateKey(day1Target.getTime())
-    day1Retention = eventDateKeys.has(day1Key) ? 100 : 0
 
-    const day7Target = new Date(first)
-    day7Target.setDate(day7Target.getDate() + 6)
-    const day7Key = toDateKey(day7Target.getTime())
-    let hasDay7 = false
-    for (let offset = 0; offset <= 6; offset++) {
-      const check = new Date(day7Target)
-      check.setDate(check.getDate() - (6 - offset))
-      if (eventDateKeys.has(toDateKey(check.getTime()))) {
-        hasDay7 = true
-        break
-      }
+    const checkTarget = (offset: number): boolean => {
+      const target = new Date(first)
+      target.setDate(target.getDate() + offset)
+      return eventDateKeys.has(toDateKey(target.getTime()))
     }
-    day7Retention = hasDay7 ? 100 : 0
 
-    const day30Target = new Date(first)
-    day30Target.setDate(day30Target.getDate() + 29)
-    const day30Key = toDateKey(day30Target.getTime())
-    let hasDay30 = false
-    for (let offset = 0; offset <= 29; offset++) {
-      const check = new Date(day30Target)
-      check.setDate(check.getDate() - (29 - offset))
-      if (eventDateKeys.has(toDateKey(check.getTime()))) {
-        hasDay30 = true
-        break
-      }
+    day1Retention = checkTarget(1) ? 100 : 0
+    day7Retention = checkTarget(7) ? 100 : 0
+    day30Retention = checkTarget(30) ? 100 : 0
+
+    const lastDate = sortedDates[sortedDates.length - 1]
+    const last = new Date(lastDate)
+    const spanDays = Math.max(1, Math.round((last.getTime() - first.getTime()) / (24 * 60 * 60 * 1000)))
+
+    if (spanDays < 1) {
+      day1Retention = 0
     }
-    day30Retention = hasDay30 ? 100 : 0
-
-    if (sortedDates.length >= 2) {
-      const last = new Date(lastDate)
-      const spanDays = Math.max(1, Math.round((last.getTime() - first.getTime()) / (24 * 60 * 60 * 1000)))
-      day1Retention = Math.round((eventDateKeys.size / (spanDays + 1)) * 100)
-      day7Retention = spanDays >= 6 ? day1Retention : Math.round((eventDateKeys.size / (spanDays + 1)) * 100)
-      day30Retention = spanDays >= 29 ? Math.round((eventDateKeys.size / (spanDays + 1)) * 100) : Math.round((eventDateKeys.size / (spanDays + 1)) * 100)
+    if (spanDays < 7) {
+      day7Retention = 0
+    }
+    if (spanDays < 30) {
+      day30Retention = 0
     }
   }
 
@@ -583,14 +574,14 @@ function goBack() {
 
         <div class="bg-gray-800/80 backdrop-blur-sm rounded-xl p-4 border border-amber-500/20 hover:border-amber-500/40 transition-all">
           <div class="flex items-center justify-between mb-2">
-            <span class="text-xs text-gray-400">SKU渗透率</span>
+            <span class="text-xs text-gray-400">付费转化率</span>
             <div class="w-8 h-8 rounded-lg bg-amber-500/15 flex items-center justify-center">
               <CreditCard class="w-4 h-4 text-amber-400" />
             </div>
           </div>
-          <div class="text-2xl font-bold text-amber-400">{{ paymentConversionMetrics.skuPenetrationRate }}%</div>
+          <div class="text-2xl font-bold text-amber-400">{{ paymentConversionMetrics.payRate }}%</div>
           <div class="mt-2 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-            <div class="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full transition-all" :style="{ width: `${paymentConversionMetrics.skuPenetrationRate}%` }"></div>
+            <div class="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full transition-all" :style="{ width: `${paymentConversionMetrics.payRate}%` }"></div>
           </div>
         </div>
 
@@ -813,12 +804,23 @@ function goBack() {
             </div>
             <div class="mt-2 pt-3 border-t border-gray-700">
               <div class="flex items-center justify-between text-sm mb-1">
-                <span class="text-gray-400">SKU渗透率</span>
-                <span class="text-amber-400 font-medium">{{ paymentConversionMetrics.skuPenetrationRate }}%</span>
+                <span class="text-gray-400">付费转化率 (活跃)</span>
+                <span class="text-amber-400 font-medium">{{ paymentConversionMetrics.payRate }}%</span>
               </div>
               <div class="h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                <div class="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full" :style="{ width: `${paymentConversionMetrics.skuPenetrationRate}%` }"></div>
+                <div class="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full" :style="{ width: `${paymentConversionMetrics.payRate}%` }"></div>
               </div>
+              <p class="text-xs text-gray-500 mt-1">付费天数 {{ paymentConversionMetrics.purchaseActiveDays }} / 活跃天数 {{ paymentConversionMetrics.activeDays }}</p>
+            </div>
+            <div class="mt-2">
+              <div class="flex items-center justify-between text-sm mb-1">
+                <span class="text-gray-400">付费转化率 (登录)</span>
+                <span class="text-amber-400 font-medium">{{ paymentConversionMetrics.payRateByLogin }}%</span>
+              </div>
+              <div class="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                <div class="h-full bg-gradient-to-r from-amber-500/70 to-amber-300/70 rounded-full" :style="{ width: `${paymentConversionMetrics.payRateByLogin}%` }"></div>
+              </div>
+              <p class="text-xs text-gray-500 mt-1">付费天数 {{ paymentConversionMetrics.purchaseActiveDays }} / 登录天数 {{ paymentConversionMetrics.loginDays }}</p>
             </div>
             <div class="flex items-center justify-between text-sm">
               <span class="text-gray-400">日均消费</span>
