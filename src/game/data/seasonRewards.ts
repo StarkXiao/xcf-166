@@ -5,7 +5,177 @@ import type {
   Region,
   LeaderboardRewardType,
   LeaderboardRewardConfig,
+  PlayerSeason,
 } from '@/types/season'
+
+export interface PlayerSeasonProfile {
+  playerId: string
+  playerName: string
+  playerAvatar: string
+  regionId: string
+  regionName: string
+  playerSeason: PlayerSeason
+}
+
+function createPlayerSeason(
+  playerId: string,
+  level: number,
+  totalExp: number,
+  rankScore: number
+): PlayerSeason {
+  const seasonId = 'season_001'
+  let exp = 0
+  let prevLevelExp = 0
+  for (let l = 1; l < level; l++) {
+    prevLevelExp += Math.floor(100 * Math.pow(l, 1.5))
+  }
+  exp = totalExp - prevLevelExp
+  if (exp < 0) exp = 0
+  return {
+    id: `ps_${playerId}`,
+    playerId,
+    seasonId,
+    level,
+    exp,
+    totalExp,
+    rankScore,
+    joinedAt: Date.now() - 30 * 24 * 60 * 60 * 1000,
+    lastResetDaily: Date.now() - 3600 * 1000,
+    lastResetWeekly: Date.now() - 3600 * 1000,
+  }
+}
+
+export const playerSeasonProfiles: PlayerSeasonProfile[] = [
+  {
+    playerId: 'player_001',
+    playerName: '守夜人老张',
+    playerAvatar: '👴',
+    regionId: 'region_001',
+    regionName: '华东区',
+    playerSeason: createPlayerSeason('player_001', 15, 12450, 25653),
+  },
+  {
+    playerId: 'player_002',
+    playerName: '遗物猎人小李',
+    playerAvatar: '🧑',
+    regionId: 'region_002',
+    regionName: '华北区',
+    playerSeason: createPlayerSeason('player_002', 8, 4560, 13384),
+  },
+  {
+    playerId: 'player_003',
+    playerName: '殡仪馆学徒',
+    playerAvatar: '👧',
+    regionId: 'region_003',
+    regionName: '华南区',
+    playerSeason: createPlayerSeason('player_003', 22, 35680, 29042),
+  },
+  {
+    playerId: 'player_004',
+    playerName: '午夜来客',
+    playerAvatar: '🕵️',
+    regionId: 'region_001',
+    regionName: '华东区',
+    playerSeason: createPlayerSeason('player_004', 30, 68900, 38721),
+  },
+  {
+    playerId: 'player_005',
+    playerName: '安静的守护者',
+    playerAvatar: '🧙',
+    regionId: 'region_004',
+    regionName: '西南区',
+    playerSeason: createPlayerSeason('player_005', 12, 8230, 21739),
+  },
+  {
+    playerId: 'player_006',
+    playerName: '追忆者',
+    playerAvatar: '👩',
+    regionId: 'region_002',
+    regionName: '华北区',
+    playerSeason: createPlayerSeason('player_006', 5, 1250, 8760),
+  },
+  {
+    playerId: 'player_007',
+    playerName: '灵魂摆渡人',
+    playerAvatar: '🧔',
+    regionId: 'region_005',
+    regionName: '华中区',
+    playerSeason: createPlayerSeason('player_007', 45, 156800, 52430),
+  },
+  {
+    playerId: 'player_008',
+    playerName: '新来的助手',
+    playerAvatar: '🧒',
+    regionId: 'region_003',
+    regionName: '华南区',
+    playerSeason: createPlayerSeason('player_008', 3, 680, 5420),
+  },
+  {
+    playerId: 'player_009',
+    playerName: '幽冥渡者',
+    playerAvatar: '👻',
+    regionId: 'region_001',
+    regionName: '华东区',
+    playerSeason: createPlayerSeason('player_009', 48, 172300, 58900),
+  },
+  {
+    playerId: 'player_010',
+    playerName: '暗夜猎手',
+    playerAvatar: '🦇',
+    regionId: 'region_001',
+    regionName: '华东区',
+    playerSeason: createPlayerSeason('player_010', 42, 135600, 45280),
+  },
+  {
+    playerId: 'player_011',
+    playerName: '灵魂收割者',
+    playerAvatar: '💀',
+    regionId: 'region_002',
+    regionName: '华北区',
+    playerSeason: createPlayerSeason('player_011', 40, 125400, 42100),
+  },
+  {
+    playerId: 'player_012',
+    playerName: '月下独行者',
+    playerAvatar: '🌙',
+    regionId: 'region_001',
+    regionName: '华东区',
+    playerSeason: createPlayerSeason('player_012', 35, 98700, 35680),
+  },
+  {
+    playerId: 'player_013',
+    playerName: '彼岸花盛开',
+    playerAvatar: '🌸',
+    regionId: 'region_003',
+    regionName: '华南区',
+    playerSeason: createPlayerSeason('player_013', 32, 86200, 31250),
+  },
+  {
+    playerId: 'player_014',
+    playerName: '黄泉引路人',
+    playerAvatar: '🔥',
+    regionId: 'region_002',
+    regionName: '华北区',
+    playerSeason: createPlayerSeason('player_014', 28, 72300, 28430),
+  },
+  {
+    playerId: 'player_015',
+    playerName: '忘川摆渡人',
+    playerAvatar: '⛵',
+    regionId: 'region_004',
+    regionName: '西南区',
+    playerSeason: createPlayerSeason('player_015', 25, 58900, 24560),
+  },
+]
+
+export function getPlayerSeasonProfile(playerId: string): PlayerSeasonProfile | undefined {
+  return playerSeasonProfiles.find((p) => p.playerId === playerId)
+}
+
+export function getPlayerRankScore(playerId: string): number {
+  const profile = getPlayerSeasonProfile(playerId)
+  return profile ? profile.playerSeason.rankScore : 0
+}
 
 export const globalRankRewardTiers: RankRewardTier[] = [
   { minRank: 1, maxRank: 1, rewardId: 'reward_rank_global_1', tierName: '全服至尊' },
@@ -554,52 +724,57 @@ export const regions: Region[] = [
   { id: 'region_005', name: '华中区', code: 'central', serverName: '望乡台' },
 ]
 
-function createMockEntry(
-  id: string,
-  playerId: string,
-  playerName: string,
-  playerAvatar: string,
-  score: number,
-  previousRank: number,
-  regionId?: string,
-  regionName?: string,
+export function createLeaderboardEntryFromProfile(
+  profile: PlayerSeasonProfile,
+  previousRankMap: Map<string, number>,
   isFriend: boolean = false
 ): LeaderboardEntry {
   return {
-    id,
-    playerId,
+    id: `entry_${profile.playerId}`,
+    playerId: profile.playerId,
     seasonId: 'season_001',
-    playerName,
-    playerAvatar,
+    playerName: profile.playerName,
+    playerAvatar: profile.playerAvatar,
     rank: 0,
     displayRank: 0,
     isTied: false,
-    score,
-    previousRank,
-    regionId,
-    regionName,
+    score: profile.playerSeason.rankScore,
+    previousRank: previousRankMap.get(profile.playerId) || 0,
+    regionId: profile.regionId,
+    regionName: profile.regionName,
     isFriend,
     updatedAt: Date.now(),
   }
 }
 
-export const mockLeaderboard = [
-  createMockEntry('1', 'player_001', '幽冥渡者', '👻', 15680, 1, 'region_001', '华东区'),
-  createMockEntry('2', 'player_002', '暗夜猎手', '🦇', 14230, 3, 'region_001', '华东区'),
-  createMockEntry('3', 'player_003', '灵魂收割者', '💀', 13890, 2, 'region_002', '华北区'),
-  createMockEntry('4', 'player_004', '月下独行者', '🌙', 12450, 5, 'region_001', '华东区'),
-  createMockEntry('5', 'player_005', '彼岸花盛开', '🌸', 11200, 4, 'region_003', '华南区'),
-  createMockEntry('6', 'player_006', '黄泉引路人', '🔥', 10890, 8, 'region_002', '华北区'),
-  createMockEntry('7', 'player_007', '忘川摆渡人', '⛵', 9870, 6, 'region_004', '西南区'),
-  createMockEntry('8', 'player_008', '三生石畔客', '🪨', 8760, 10, 'region_001', '华东区'),
-  createMockEntry('9', 'player_009', '奈何桥上叹', '🌉', 7650, 7, 'region_005', '华中区'),
-  createMockEntry('10', 'player_010', '孟婆汤一碗', '🍵', 6540, 9, 'region_003', '华南区'),
-  createMockEntry('11', 'player_011', '黑白无常', '⚫', 15680, 11, 'region_001', '华东区'),
-  createMockEntry('12', 'player_012', '牛头马面', '🐂', 5800, 12, 'region_002', '华北区'),
-  createMockEntry('13', 'player_013', '判官笔', '🖊️', 5200, 13, 'region_001', '华东区'),
-  createMockEntry('14', 'player_014', '阎王令', '👑', 4800, 15, 'region_004', '西南区'),
-  createMockEntry('15', 'player_015', '轮回镜', '🔮', 4500, 14, 'region_005', '华中区'),
-]
+export function buildPreviousRankMap(profiles: PlayerSeasonProfile[]): Map<string, number> {
+  const sorted = [...profiles].sort(
+    (a, b) =>
+      b.playerSeason.rankScore - a.playerSeason.rankScore ||
+      b.playerSeason.totalExp - a.playerSeason.totalExp
+  )
+  const map = new Map<string, number>()
+  sorted.forEach((profile, index) => {
+    const offset = (index % 3) - 1
+    const prevRank = Math.max(1, Math.min(sorted.length, index + 1 + offset))
+    map.set(profile.playerId, prevRank)
+  })
+  return map
+}
+
+export function buildGlobalLeaderboard(): LeaderboardEntry[] {
+  const sortedProfiles = [...playerSeasonProfiles].sort(
+    (a, b) =>
+      b.playerSeason.rankScore - a.playerSeason.rankScore ||
+      b.playerSeason.totalExp - a.playerSeason.totalExp
+  )
+  const previousRankMap = buildPreviousRankMap(playerSeasonProfiles)
+  return sortedProfiles.map((profile) =>
+    createLeaderboardEntryFromProfile(profile, previousRankMap, false)
+  )
+}
+
+export const mockLeaderboard = buildGlobalLeaderboard()
 
 export function calculateTiedRanks(entries: LeaderboardEntry[]): LeaderboardEntry[] {
   const sorted = [...entries].sort((a, b) => b.score - a.score)

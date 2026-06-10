@@ -30,6 +30,12 @@ import {
   getRegionById,
   getRankRewardId,
   getRankTierName,
+  playerSeasonProfiles,
+  createLeaderboardEntryFromProfile,
+  getPlayerSeasonProfile,
+  getPlayerRankScore,
+  buildGlobalLeaderboard,
+  buildPreviousRankMap,
 } from '@/game/data/seasonRewards'
 import type { LeaderboardRewardType } from '@/types/season'
 import { useActivityStore } from '@/stores/activityStore'
@@ -522,15 +528,21 @@ export const useSeasonStore = defineStore('season', () => {
       friendStore.acceptedFriends.map((f) => f.friendId)
     )
 
-    let entries: LeaderboardEntry[] = mockLeaderboard.map((entry) => ({
-      ...entry,
-      isFriend: friendIds.has(entry.playerId),
-    }))
+    const previousRankMap = buildPreviousRankMap(playerSeasonProfiles)
+
+    let entries: LeaderboardEntry[] = playerSeasonProfiles.map((profile) =>
+      createLeaderboardEntryFromProfile(profile, previousRankMap, friendIds.has(profile.playerId))
+    )
 
     if (playerSeason.value) {
       const region = getRegionById(playerRegionId.value || '')
       const playerEntry = createPlayerEntry(region?.id, region?.name, false)
-      entries.push(playerEntry)
+      const existingIdx = entries.findIndex((e) => e.playerId === playerSeason.value!.playerId)
+      if (existingIdx >= 0) {
+        entries[existingIdx] = playerEntry
+      } else {
+        entries.push(playerEntry)
+      }
     }
 
     leaderboard.value = calculateTiedRanks(entries)
@@ -547,36 +559,34 @@ export const useSeasonStore = defineStore('season', () => {
       return
     }
 
-    const globalEntries = displayLeaderboard.value.length > 0 ? displayLeaderboard.value : mockLeaderboard
-    const regionEntries = globalEntries.filter(
-      (entry) => entry.regionId === playerRegionId.value
+    const friendStore = useFriendStore()
+    const friendIds = new Set(
+      friendStore.acceptedFriends.map((f) => f.friendId)
     )
 
-    const entries: LeaderboardEntry[] = regionEntries.map((entry) => ({
-      ...entry,
-      rank: 0,
-      displayRank: 0,
-      isTied: false,
-    }))
+    const regionProfiles = playerSeasonProfiles.filter(
+      (profile) => profile.regionId === playerRegionId.value
+    )
+    const previousRankMap = buildPreviousRankMap(regionProfiles)
 
-    const playerInRegion = entries.some(
-      (e) => e.playerId === playerSeason.value?.playerId
+    const entries: LeaderboardEntry[] = regionProfiles.map((profile) =>
+      createLeaderboardEntryFromProfile(profile, previousRankMap, friendIds.has(profile.playerId))
     )
 
-    if (playerSeason.value && !playerInRegion) {
-      const region = getRegionById(playerRegionId.value)
-      const playerEntry = createPlayerEntry(region?.id, region?.name, false)
-      entries.push(playerEntry)
+    if (playerSeason.value) {
+      const playerRegion = getRegionById(playerRegionId.value)
+      if (playerRegion && playerRegion.id === playerRegionId.value) {
+        const playerEntry = createPlayerEntry(playerRegion.id, playerRegion.name, false)
+        const existingIdx = entries.findIndex((e) => e.playerId === playerSeason.value!.playerId)
+        if (existingIdx >= 0) {
+          entries[existingIdx] = playerEntry
+        } else {
+          entries.push(playerEntry)
+        }
+      }
     }
 
     regionLeaderboard.value = calculateTiedRanks(entries)
-  }
-
-  function calculateFriendSeasonScore(friend: Friend): number {
-    const baseScore = friend.currentDay * 50 + friend.totalOrdersCompleted * 20
-    const friendshipBonus = friend.friendshipLevel * 100
-    const randomFactor = Math.floor(Math.random() * 500)
-    return baseScore + friendshipBonus + randomFactor
   }
 
   function loadFriendLeaderboard() {
@@ -588,19 +598,38 @@ export const useSeasonStore = defineStore('season', () => {
     const friendStore = useFriendStore()
     const friends = friendStore.acceptedFriends
 
-    const friendEntries: LeaderboardEntry[] = friends.map((friend, index) => ({
-      id: generateId(),
-      playerId: friend.friendId,
+    const friendProfiles = friends
+      .map((friend) => ({
+        friend,
+        profile: getPlayerSeasonProfile(friend.friendId),
+      }))
+      .filter((item): item is { friend: Friend; profile: NonNullable<typeof item.profile> } =>
+        item.profile !== undefined
+      )
+
+    const previousRankMap = new Map<string, number>()
+    const sortedForPrev = [...friendProfiles].sort(
+      (a, b) =>
+        b.profile.playerSeason.rankScore - a.profile.playerSeason.rankScore ||
+        b.profile.playerSeason.totalExp - a.profile.playerSeason.totalExp
+    )
+    sortedForPrev.forEach((item, index) => {
+      previousRankMap.set(item.profile.playerId, Math.max(1, index + 1))
+    })
+
+    const friendEntries: LeaderboardEntry[] = friendProfiles.map(({ friend, profile }) => ({
+      id: `fentry_${profile.playerId}`,
+      playerId: profile.playerId,
       seasonId: currentSeason.value?.id || '',
       playerName: friend.friendName,
       playerAvatar: friend.friendAvatar,
       rank: 0,
       displayRank: 0,
       isTied: false,
-      score: calculateFriendSeasonScore(friend),
-      previousRank: Math.max(1, index + 1 + Math.floor(Math.random() * 3) - 1),
-      regionId: undefined,
-      regionName: undefined,
+      score: profile.playerSeason.rankScore,
+      previousRank: previousRankMap.get(profile.playerId) || 0,
+      regionId: profile.regionId,
+      regionName: profile.regionName,
       isFriend: true,
       updatedAt: Date.now(),
     }))
@@ -1332,7 +1361,6 @@ export const useSeasonStore = defineStore('season', () => {
     loadTasks,
     loadRewards,
     loadLeaderboard,
-    calculateFriendSeasonScore,
     loadRegionLeaderboard,
     loadFriendLeaderboard,
     loadAllLeaderboards,
