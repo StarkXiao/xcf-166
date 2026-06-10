@@ -1,5 +1,5 @@
 import type { CharacterSaveData } from './characterTypes'
-import type { ShopItem, DiscountConfig, ShopOrder, InventoryItem } from '../types/shop'
+import type { ShopItem, DiscountConfig, ShopOrder, InventoryItem, RollbackRecord } from '../types/shop'
 
 export type TimePhase = 'day' | 'night'
 
@@ -85,6 +85,10 @@ export interface ShopSaveData {
   orders: ShopOrder[]
   inventory: InventoryItem[]
   purchaseHistory: Record<string, number>
+  dailyPurchaseHistory: Record<string, { date: string; count: number }>
+  weeklyPurchaseHistory: Record<string, { weekKey: string; count: number }>
+  monthlyPurchaseHistory: Record<string, { monthKey: string; count: number }>
+  rollbackRecords: RollbackRecord[]
 }
 
 export interface SaveData {

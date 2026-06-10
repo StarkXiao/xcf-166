@@ -38,6 +38,7 @@ const categories: Array<{ key: ItemCategory | 'all'; label: string }> = [
   { key: 'all', label: '全部' },
   { key: 'consumable', label: '消耗品' },
   { key: 'buff', label: '增益道具' },
+  { key: 'gift_pack', label: '礼包' },
   { key: 'material', label: '材料' },
   { key: 'cosmetic', label: '外观' }
 ]

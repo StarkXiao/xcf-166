@@ -1,7 +1,9 @@
-export type ItemCategory = 'consumable' | 'buff' | 'material' | 'cosmetic'
+export type ItemCategory = 'consumable' | 'buff' | 'material' | 'cosmetic' | 'gift_pack'
 export type ItemRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
-export type ShopOrderStatus = 'pending' | 'completed' | 'refunded'
+export type ShopOrderStatus = 'pending' | 'completed' | 'refunded' | 'rollback'
 export type CurrencyType = 'money' | 'reputation'
+export type PurchaseLimitType = 'permanent' | 'daily' | 'weekly' | 'monthly'
+export type RollbackStatus = 'none' | 'pending' | 'success' | 'failed'
 
 export interface DiscountConfig {
   id: string
@@ -36,6 +38,9 @@ export interface ShopItem {
   isOnSale: boolean
   effect: ItemEffect
   unlockCondition?: UnlockCondition
+  giftPack?: GiftPackConfig
+  purchaseLimits?: PurchaseLimitConfig[]
+  tag?: string
 }
 
 export interface ItemEffect {
@@ -52,11 +57,58 @@ export interface UnlockCondition {
   value: number
 }
 
+export interface PurchaseLimitConfig {
+  type: PurchaseLimitType
+  maxCount: number
+  resetAt?: number
+}
+
+export interface GiftPackItem {
+  itemId: string
+  itemName?: string
+  quantity: number
+  guaranteed?: boolean
+  weight?: number
+}
+
+export interface GiftPackConfig {
+  items: GiftPackItem[]
+  autoUnpack: boolean
+  showPreview: boolean
+  previewMode?: 'full' | 'partial' | 'random'
+  previewCount?: number
+}
+
+export interface AssetChange {
+  type: 'money' | 'reputation' | 'inventory' | 'buff'
+  target: string
+  amount: number
+  itemId?: string
+}
+
+export interface RollbackRecord {
+  id: string
+  orderId: string
+  changes: AssetChange[]
+  status: RollbackStatus
+  createdAt: number
+  executedAt?: number
+  reason?: string
+}
+
 export interface InventoryItem {
   itemId: string
   quantity: number
   acquiredAt: number
   usedAt?: number
+}
+
+export interface UnpackedItem {
+  itemId: string
+  itemName: string
+  quantity: number
+  icon?: string
+  rarity?: ItemRarity
 }
 
 export interface ShopOrder {
@@ -76,6 +128,11 @@ export interface ShopOrder {
   status: ShopOrderStatus
   createdAt: number
   completedAt?: number
+  parentOrderId?: string
+  isGiftPack?: boolean
+  unpackedItems?: UnpackedItem[]
+  refundedAt?: number
+  rollbackReason?: string
 }
 
 export interface ShopState {
@@ -83,6 +140,10 @@ export interface ShopState {
   discounts: DiscountConfig[]
   orders: ShopOrder[]
   purchaseHistory: Record<string, number>
+  dailyPurchaseHistory: Record<string, { date: string; count: number }>
+  weeklyPurchaseHistory: Record<string, { weekKey: string; count: number }>
+  monthlyPurchaseHistory: Record<string, { monthKey: string; count: number }>
+  rollbackRecords: RollbackRecord[]
 }
 
 export interface PurchaseResult {
@@ -90,6 +151,11 @@ export interface PurchaseResult {
   message: string
   order?: ShopOrder
   inventoryItem?: InventoryItem
+  unpackedItems?: UnpackedItem[]
+  rollbackInfo?: {
+    applied: boolean
+    reason?: string
+  }
 }
 
 export interface GameItemDef {

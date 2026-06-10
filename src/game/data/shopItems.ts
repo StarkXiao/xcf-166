@@ -258,6 +258,149 @@ export function getInitialShopItems(): ShopItem[] {
         type: 'order_complete',
         value: 30
       }
+    },
+    {
+      id: 'starter_gift_pack',
+      name: '新手补给礼包',
+      description: '为新入职的调查员准备的基础补给，包含恢复道具和增益道具。',
+      category: 'gift_pack',
+      rarity: 'uncommon',
+      icon: '🎁',
+      price: { money: 1500 },
+      originalPrice: { money: 2100 },
+      stock: 50,
+      maxStock: 50,
+      maxPurchasePerUser: 1,
+      isOnSale: true,
+      effect: {
+        type: 'instant',
+        target: 'sanity',
+        value: 0
+      },
+      tag: 'value',
+      purchaseLimits: [
+        { type: 'permanent', maxCount: 1 }
+      ],
+      giftPack: {
+        items: [
+          { itemId: 'sanity_potion_small', itemName: '小型理智药剂', quantity: 3, guaranteed: true },
+          { itemId: 'sanity_potion_medium', itemName: '中型理智药剂', quantity: 1, guaranteed: true },
+          { itemId: 'lucky_charm', itemName: '幸运护符', quantity: 1, guaranteed: true },
+          { itemId: 'focus_crystal', itemName: '专注水晶', quantity: 1, guaranteed: true },
+          { itemId: 'money_bag', itemName: '钱袋', quantity: 2, guaranteed: true }
+        ],
+        autoUnpack: true,
+        showPreview: true,
+        previewMode: 'full'
+      }
+    },
+    {
+      id: 'advanced_buff_pack',
+      name: '高阶增益礼包',
+      description: '包含多种强力增益道具，让你在关键任务中如虎添翼。',
+      category: 'gift_pack',
+      rarity: 'rare',
+      icon: '✨',
+      price: { money: 5000, reputation: 20 },
+      originalPrice: { money: 6500, reputation: 30 },
+      stock: 20,
+      maxStock: 20,
+      maxPurchasePerUser: 3,
+      isOnSale: false,
+      effect: {
+        type: 'instant',
+        target: 'sanity',
+        value: 0
+      },
+      tag: 'hot',
+      purchaseLimits: [
+        { type: 'weekly', maxCount: 1 },
+        { type: 'permanent', maxCount: 3 }
+      ],
+      giftPack: {
+        items: [
+          { itemId: 'sanctuary_candle', itemName: '圣所蜡烛', quantity: 1, guaranteed: true },
+          { itemId: 'golden_contract', itemName: '黄金契约', quantity: 1, guaranteed: true },
+          { itemId: 'focus_crystal', itemName: '专注水晶', quantity: 2, guaranteed: true },
+          { itemId: 'lucky_charm', itemName: '幸运护符', quantity: 2, guaranteed: true },
+          { itemId: 'protective_ward', itemName: '防护罩', quantity: 1, guaranteed: true }
+        ],
+        autoUnpack: true,
+        showPreview: true,
+        previewMode: 'full'
+      }
+    },
+    {
+      id: 'daily_supply_pack',
+      name: '每日补给礼包',
+      description: '每日限购的超值补给包，包含日常所需的恢复道具。',
+      category: 'gift_pack',
+      rarity: 'common',
+      icon: '📦',
+      price: { money: 500 },
+      originalPrice: { money: 800 },
+      stock: 99,
+      maxStock: 99,
+      maxPurchasePerUser: 99,
+      isOnSale: true,
+      effect: {
+        type: 'instant',
+        target: 'sanity',
+        value: 0
+      },
+      tag: 'limited',
+      purchaseLimits: [
+        { type: 'daily', maxCount: 1 }
+      ],
+      giftPack: {
+        items: [
+          { itemId: 'sanity_potion_small', itemName: '小型理智药剂', quantity: 2, guaranteed: true },
+          { itemId: 'money_bag', itemName: '钱袋', quantity: 1, guaranteed: true }
+        ],
+        autoUnpack: true,
+        showPreview: true,
+        previewMode: 'full'
+      }
+    },
+    {
+      id: 'legendary_surprise_pack',
+      name: '传奇惊喜礼包',
+      description: '神秘礼包，必定获得传奇品质道具与多种稀有物品。',
+      category: 'gift_pack',
+      rarity: 'legendary',
+      icon: '💎',
+      price: { money: 15000, reputation: 80 },
+      originalPrice: { money: 20000, reputation: 100 },
+      stock: 5,
+      maxStock: 5,
+      maxPurchasePerUser: 1,
+      isOnSale: false,
+      effect: {
+        type: 'instant',
+        target: 'sanity',
+        value: 0
+      },
+      tag: 'new',
+      purchaseLimits: [
+        { type: 'monthly', maxCount: 1 },
+        { type: 'permanent', maxCount: 1 }
+      ],
+      unlockCondition: {
+        type: 'order_complete',
+        value: 20
+      },
+      giftPack: {
+        items: [
+          { itemId: 'legendary_compass', itemName: '传奇罗盘', quantity: 1, guaranteed: true },
+          { itemId: 'sanctuary_candle', itemName: '圣所蜡烛', quantity: 2, guaranteed: true },
+          { itemId: 'protective_ward', itemName: '防护罩', quantity: 3, guaranteed: true },
+          { itemId: 'reputation_medal', itemName: '荣誉奖章', quantity: 5, guaranteed: true },
+          { itemId: 'sanity_potion_large', itemName: '大型理智药剂', quantity: 3, guaranteed: true }
+        ],
+        autoUnpack: true,
+        showPreview: true,
+        previewMode: 'full'
+      }
     }
   ]
 }
@@ -319,5 +462,13 @@ export const categoryNames: Record<string, string> = {
   consumable: '消耗品',
   buff: '增益道具',
   material: '材料',
-  cosmetic: '外观'
+  cosmetic: '外观',
+  gift_pack: '礼包'
+}
+
+export const tagNames: Record<string, string> = {
+  hot: '热销',
+  new: '新品',
+  limited: '限时',
+  value: '超值'
 }

@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { ShopItem, DiscountConfig } from '../../types/shop'
 import { useShopStore } from '../../stores/shopStore'
 import { useGameStore } from '../../stores/gameStore'
-import { rarityColors, rarityBgColors, categoryNames } from '../../game/data/shopItems'
-import { Lock, ShoppingCart, Tag, Clock } from 'lucide-vue-next'
+import { rarityColors, rarityBgColors, categoryNames, tagNames } from '../../game/data/shopItems'
+import { Lock, ShoppingCart, Tag, Clock, Gift, X } from 'lucide-vue-next'
 
 const props = defineProps<{
   item: ShopItem
@@ -18,6 +18,8 @@ const emit = defineEmits<{
 
 const shopStore = useShopStore()
 const gameStore = useGameStore()
+
+const showGiftPreview = ref(false)
 
 const currentPrice = computed(() => shopStore.getItemCurrentPrice(props.item))
 const isUnlocked = computed(() => shopStore.isItemUnlocked(props.item))
@@ -50,6 +52,14 @@ const isInCart = computed(() => {
   return shopStore.cart.some(c => c.item.id === props.item.id)
 })
 
+const isGiftPack = computed(() => props.item.category === 'gift_pack' && !!props.item.giftPack)
+const tagText = computed(() => props.item.tag ? tagNames[props.item.tag] || null : null)
+const limitText = computed(() => shopStore.getPurchaseLimitText(props.item))
+const giftPreviewItems = computed(() => {
+  if (!props.item.giftPack) return []
+  return shopStore.getGiftPackPreviewItems(props.item.giftPack)
+})
+
 function handleBuy() {
   if (canBuy.value) {
     emit('buy', props.item)
@@ -73,6 +83,14 @@ function formatTimeRemaining(endTime: number): string {
   }
   return `${hours}时${minutes}分`
 }
+
+function getItemRarityClass(rarity?: string): string {
+  return rarity ? (rarityColors[rarity] || '') : ''
+}
+
+function getItemRarityBgClass(rarity?: string): string {
+  return rarity ? (rarityBgColors[rarity] || '') : ''
+}
 </script>
 
 <template>
@@ -84,6 +102,21 @@ function formatTimeRemaining(endTime: number): string {
       isUnlocked ? 'hover:scale-[1.02] hover:shadow-lg hover:shadow-current/20' : 'opacity-60'
     ]"
   >
+    <div class="absolute top-0 left-0 z-10 flex gap-1">
+      <div
+        v-if="tagText"
+        class="bg-gradient-to-r from-pink-500 to-purple-500 text-white px-2 py-1 text-xs font-bold rounded-br-lg"
+      >
+        {{ tagText }}
+      </div>
+      <div
+        v-if="isGiftPack"
+        class="bg-gradient-to-r from-purple-500 to-indigo-500 text-white px-2 py-1 text-xs font-bold rounded-br-lg flex items-center gap-1"
+      >
+        <Gift class="w-3 h-3" />
+        礼包
+      </div>
+    </div>
     <div
       v-if="hasDiscount"
       class="absolute top-0 right-0 z-10 bg-red-500 text-white px-2 py-1 text-xs font-bold rounded-bl-lg flex items-center gap-1"
@@ -93,7 +126,7 @@ function formatTimeRemaining(endTime: number): string {
     </div>
 
     <div class="p-4">
-      <div class="flex items-start gap-3 mb-3">
+      <div class="flex items-start gap-3 mb-3 mt-4">
         <div class="text-4xl flex-shrink-0">{{ item.icon }}</div>
         <div class="flex-1 min-w-0">
           <div class="font-bold text-white truncate">{{ item.name }}</div>
@@ -102,6 +135,19 @@ function formatTimeRemaining(endTime: number): string {
       </div>
 
       <p class="text-sm text-gray-300 mb-3 line-clamp-2 h-10">{{ item.description }}</p>
+
+      <div v-if="isGiftPack && item.giftPack?.showPreview" class="mb-3 p-2 bg-gray-800/50 rounded-lg">
+        <button
+          @click.stop="showGiftPreview = true"
+          class="w-full text-left flex items-center justify-between text-sm text-purple-300 hover:text-purple-200 transition-colors"
+        >
+          <span class="flex items-center gap-1.5">
+            <Gift class="w-4 h-4" />
+            查看礼包内容 ({{ giftPreviewItems.length }}件)
+          </span>
+          <span class="text-xs">点击展开</span>
+        </button>
+      </div>
 
       <div class="space-y-2 mb-4">
         <div class="flex items-center justify-between text-sm">
@@ -129,6 +175,13 @@ function formatTimeRemaining(endTime: number): string {
           <span class="text-gray-400">库存</span>
           <span :class="item.stock <= 5 ? 'text-red-400' : 'text-gray-300'">
             {{ stockText }}
+          </span>
+        </div>
+
+        <div v-if="limitText" class="flex items-center justify-between text-sm">
+          <span class="text-gray-400">限购</span>
+          <span class="text-orange-400 text-xs">
+            {{ limitText }}
           </span>
         </div>
 
@@ -176,5 +229,61 @@ function formatTimeRemaining(endTime: number): string {
         </button>
       </div>
     </div>
+
+    <Teleport to="body">
+      <Transition name="fade">
+        <div
+          v-if="showGiftPreview"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        >
+          <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="showGiftPreview = false"></div>
+          <div class="relative bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-md overflow-hidden">
+            <div class="flex items-center justify-between p-4 border-b border-gray-700">
+              <div class="flex items-center gap-2">
+                <Gift class="w-5 h-5 text-purple-400" />
+                <h3 class="text-lg font-bold text-white">{{ item.name }} · 礼包内容</h3>
+              </div>
+              <button @click="showGiftPreview = false" class="p-1 hover:bg-gray-800 rounded-lg transition-colors">
+                <X class="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+            <div class="p-4 max-h-80 overflow-y-auto space-y-2">
+              <div
+                v-for="previewItem in giftPreviewItems"
+                :key="previewItem.itemId"
+                class="flex items-center gap-3 p-3 rounded-xl border"
+                :class="[getItemRarityClass(previewItem.rarity), getItemRarityBgClass(previewItem.rarity)]"
+              >
+                <div class="text-2xl">{{ previewItem.icon || '📦' }}</div>
+                <div class="flex-1">
+                  <div class="font-medium text-white">{{ previewItem.itemName }}</div>
+                  <div class="text-xs text-gray-400">x{{ previewItem.quantity }}</div>
+                </div>
+              </div>
+            </div>
+            <div class="p-4 border-t border-gray-700 bg-gray-800/30">
+              <button
+                @click="showGiftPreview = false"
+                class="w-full py-2.5 bg-gray-700 hover:bg-gray-600 text-white rounded-xl font-medium transition-colors"
+              >
+                知道了
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>

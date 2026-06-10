@@ -4,7 +4,7 @@ import type { ShopItem, DiscountConfig } from '../../types/shop'
 import { useShopStore } from '../../stores/shopStore'
 import { useGameStore } from '../../stores/gameStore'
 import { rarityColors, rarityBgColors } from '../../game/data/shopItems'
-import { X, Minus, Plus, ShoppingCart, AlertCircle, CheckCircle, XCircle } from 'lucide-vue-next'
+import { X, Minus, Plus, ShoppingCart, AlertCircle, CheckCircle, XCircle, Gift, Sparkles } from 'lucide-vue-next'
 
 const props = defineProps<{
   show: boolean
@@ -79,6 +79,24 @@ const rarityBgClass = computed(() => {
   if (!props.item) return ''
   return rarityBgColors[props.item.rarity] || ''
 })
+
+const isGiftPack = computed(() => props.item?.category === 'gift_pack' && !!props.item?.giftPack)
+const giftPreviewItems = computed(() => {
+  if (!props.item?.giftPack) return []
+  return shopStore.getGiftPackPreviewItems(props.item.giftPack)
+})
+const limitText = computed(() => {
+  if (!props.item) return null
+  return shopStore.getPurchaseLimitText(props.item)
+})
+
+function getItemRarityClass(rarity?: string): string {
+  return rarity ? (rarityColors[rarity] || '') : ''
+}
+
+function getItemRarityBgClass(rarity?: string): string {
+  return rarity ? (rarityBgColors[rarity] || '') : ''
+}
 
 watch(() => props.show, (newVal) => {
   if (newVal) {
@@ -169,8 +187,33 @@ async function handlePurchase() {
               <div class="flex items-center gap-4">
                 <div class="text-5xl">{{ item.icon }}</div>
                 <div class="flex-1">
-                  <div class="font-bold text-white text-lg">{{ item.name }}</div>
+                  <div class="font-bold text-white text-lg flex items-center gap-2">
+                    {{ item.name }}
+                    <span v-if="isGiftPack" class="text-xs px-2 py-0.5 bg-purple-500/30 text-purple-300 rounded-full flex items-center gap-1">
+                      <Gift class="w-3 h-3" />
+                      礼包
+                    </span>
+                  </div>
                   <p class="text-sm text-gray-400 mt-1">{{ item.description }}</p>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="isGiftPack && giftPreviewItems.length > 0" class="mb-4">
+              <div class="flex items-center gap-2 mb-2 text-purple-300 text-sm font-medium">
+                <Sparkles class="w-4 h-4" />
+                礼包内容
+              </div>
+              <div class="bg-gray-800/50 rounded-xl p-3 space-y-2 max-h-40 overflow-y-auto">
+                <div
+                  v-for="previewItem in giftPreviewItems"
+                  :key="previewItem.itemId"
+                  class="flex items-center gap-2 p-2 rounded-lg border"
+                  :class="[getItemRarityClass(previewItem.rarity), getItemRarityBgClass(previewItem.rarity)]"
+                >
+                  <span class="text-xl">{{ previewItem.icon || '📦' }}</span>
+                  <span class="text-white text-sm flex-1">{{ previewItem.itemName }}</span>
+                  <span class="text-gray-400 text-sm font-medium">x{{ previewItem.quantity * quantity }}</span>
                 </div>
               </div>
             </div>

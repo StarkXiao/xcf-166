@@ -8,7 +8,15 @@ import type {
   PurchaseResult,
   UseItemResult,
   ItemCategory,
-  GameItemDef
+  GameItemDef,
+  GiftPackConfig,
+  GiftPackItem,
+  UnpackedItem,
+  PurchaseLimitConfig,
+  PurchaseLimitType,
+  RollbackRecord,
+  AssetChange,
+  RollbackStatus
 } from '../types/shop'
 import { getInitialShopItems, getInitialDiscounts } from '../game/data/shopItems'
 import { getItemDef } from '../game/data/itemCatalog'
@@ -28,6 +36,10 @@ export const useShopStore = defineStore('shop', () => {
   const orders = ref<ShopOrder[]>([])
   const inventory = ref<InventoryItem[]>([])
   const purchaseHistory = ref<Record<string, number>>({})
+  const dailyPurchaseHistory = ref<Record<string, { date: string; count: number }>>({})
+  const weeklyPurchaseHistory = ref<Record<string, { weekKey: string; count: number }>>({})
+  const monthlyPurchaseHistory = ref<Record<string, { monthKey: string; count: number }>>({})
+  const rollbackRecords = ref<RollbackRecord[]>([])
   const selectedCategory = ref<ItemCategory | 'all'>('all')
   const showOnlyOnSale = ref(false)
   const cart = ref<{ item: ShopItem; quantity: number }[]>([])
@@ -181,6 +193,234 @@ export const useShopStore = defineStore('shop', () => {
     }
   }
 
+  function getDateKey(date: Date = new Date()): string {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  }
+
+  function getWeekKey(date: Date = new Date()): string {
+    const firstDayOfYear = new Date(date.getFullYear(), 0, 1)
+    const pastDaysOfYear = (date.getTime() - firstDayOfYear.getTime()) / 86400000
+    const weekNumber = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7)
+    return `${date.getFullYear()}-W${String(weekNumber).padStart(2, '0')}`
+  }
+
+  function getMonthKey(date: Date = new Date()): string {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+  }
+
+  function getLimitPurchaseCount(itemId: string, limitType: PurchaseLimitType): number {
+    if (limitType === 'permanent') {
+      return purchaseHistory.value[itemId] || 0
+    }
+    if (limitType === 'daily') {
+      const key = `${itemId}_${getDateKey()}`
+      return dailyPurchaseHistory.value[key]?.count || 0
+    }
+    if (limitType === 'weekly') {
+      const key = `${itemId}_${getWeekKey()}`
+      return weeklyPurchaseHistory.value[key]?.count || 0
+    }
+    if (limitType === 'monthly') {
+      const key = `${itemId}_${getMonthKey()}`
+      return monthlyPurchaseHistory.value[key]?.count || 0
+    }
+    return 0
+  }
+
+  function recordLimitPurchase(itemId: string, quantity: number): void {
+    purchaseHistory.value[itemId] = (purchaseHistory.value[itemId] || 0) + quantity
+
+    const dailyKey = `${itemId}_${getDateKey()}`
+    if (!dailyPurchaseHistory.value[dailyKey]) {
+      dailyPurchaseHistory.value[dailyKey] = { date: getDateKey(), count: 0 }
+    }
+    dailyPurchaseHistory.value[dailyKey].count += quantity
+
+    const weeklyKey = `${itemId}_${getWeekKey()}`
+    if (!weeklyPurchaseHistory.value[weeklyKey]) {
+      weeklyPurchaseHistory.value[weeklyKey] = { weekKey: getWeekKey(), count: 0 }
+    }
+    weeklyPurchaseHistory.value[weeklyKey].count += quantity
+
+    const monthlyKey = `${itemId}_${getMonthKey()}`
+    if (!monthlyPurchaseHistory.value[monthlyKey]) {
+      monthlyPurchaseHistory.value[monthlyKey] = { monthKey: getMonthKey(), count: 0 }
+    }
+    monthlyPurchaseHistory.value[monthlyKey].count += quantity
+  }
+
+  function getPurchaseLimitText(item: ShopItem): string | null {
+    if (!item.purchaseLimits || item.purchaseLimits.length === 0) return null
+
+    const parts: string[] = []
+    for (const limit of item.purchaseLimits) {
+      const purchased = getLimitPurchaseCount(item.id, limit.type)
+      const remaining = Math.max(0, limit.maxCount - purchased)
+      const typeText = {
+        permanent: '总共',
+        daily: '今日',
+        weekly: '本周',
+        monthly: '本月'
+      }[limit.type]
+      if (remaining <= 0) {
+        parts.push(`${typeText}已达上限`)
+      } else {
+        parts.push(`${typeText}还可购买 ${remaining} 件`)
+      }
+    }
+    return parts.join('，')
+  }
+
+  function validatePurchaseLimits(item: ShopItem, quantity: number): { valid: boolean; message: string } {
+    if (!item.purchaseLimits || item.purchaseLimits.length === 0) {
+      return { valid: true, message: '' }
+    }
+
+    for (const limit of item.purchaseLimits) {
+      const purchased = getLimitPurchaseCount(item.id, limit.type)
+      if (purchased + quantity > limit.maxCount) {
+        const remaining = Math.max(0, limit.maxCount - purchased)
+        const typeText = {
+          permanent: '总限购',
+          daily: '每日限购',
+          weekly: '每周限购',
+          monthly: '每月限购'
+        }[limit.type]
+        if (remaining <= 0) {
+          return { valid: false, message: `${typeText}已达上限，无法购买` }
+        }
+        return { valid: false, message: `${typeText}还可购买 ${remaining} 件` }
+      }
+    }
+    return { valid: true, message: '' }
+  }
+
+  function getGiftPackPreviewItems(giftPack: GiftPackConfig): UnpackedItem[] {
+    const result: UnpackedItem[] = []
+    for (const packItem of giftPack.items) {
+      const shopItem = items.value.find(i => i.id === packItem.itemId)
+      const catalogItem = getItemDef(packItem.itemId)
+      result.push({
+        itemId: packItem.itemId,
+        itemName: packItem.itemName || shopItem?.name || catalogItem?.name || packItem.itemId,
+        quantity: packItem.quantity,
+        icon: shopItem?.icon || catalogItem?.icon,
+        rarity: shopItem?.rarity || catalogItem?.rarity
+      })
+    }
+    return result
+  }
+
+  function unpackGiftPack(giftPack: GiftPackConfig, packQuantity: number = 1): UnpackedItem[] {
+    const unpacked: UnpackedItem[] = []
+    for (const packItem of giftPack.items) {
+      const shopItem = items.value.find(i => i.id === packItem.itemId)
+      const catalogItem = getItemDef(packItem.itemId)
+      const qty = packItem.quantity * packQuantity
+      const existing = unpacked.find(u => u.itemId === packItem.itemId)
+      if (existing) {
+        existing.quantity += qty
+      } else {
+        unpacked.push({
+          itemId: packItem.itemId,
+          itemName: packItem.itemName || shopItem?.name || catalogItem?.name || packItem.itemId,
+          quantity: qty,
+          icon: shopItem?.icon || catalogItem?.icon,
+          rarity: shopItem?.rarity || catalogItem?.rarity
+        })
+      }
+    }
+    return unpacked
+  }
+
+  function addUnpackedItemsToInventory(unpackedItems: UnpackedItem[]): void {
+    for (const unpacked of unpackedItems) {
+      const existing = inventory.value.find(inv => inv.itemId === unpacked.itemId)
+      if (existing) {
+        existing.quantity += unpacked.quantity
+      } else {
+        inventory.value.push({
+          itemId: unpacked.itemId,
+          quantity: unpacked.quantity,
+          acquiredAt: Date.now()
+        })
+      }
+
+      const shopItem = items.value.find(i => i.id === unpacked.itemId)
+      if (shopItem && shopItem.category === 'buff' && shopItem.effect.type === 'buff') {
+        applyItemEffect(shopItem, unpacked.quantity)
+        const invItem = inventory.value.find(inv => inv.itemId === unpacked.itemId)
+        if (invItem) {
+          invItem.quantity -= unpacked.quantity
+          if (invItem.quantity <= 0) {
+            inventory.value = inventory.value.filter(inv => inv.itemId !== unpacked.itemId)
+          }
+        }
+      }
+    }
+  }
+
+  function createRollbackRecord(orderId: string, changes: AssetChange[], reason?: string): RollbackRecord {
+    const record: RollbackRecord = {
+      id: `rollback_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      orderId,
+      changes,
+      status: 'pending',
+      createdAt: Date.now(),
+      reason
+    }
+    rollbackRecords.value.push(record)
+    return record
+  }
+
+  function executeRollback(rollbackId: string): { success: boolean; message: string } {
+    const record = rollbackRecords.value.find(r => r.id === rollbackId)
+    if (!record) {
+      return { success: false, message: '回滚记录不存在' }
+    }
+    if (record.status === 'success') {
+      return { success: false, message: '该回滚已执行过' }
+    }
+
+    try {
+      for (const change of record.changes) {
+        if (change.type === 'money') {
+          gameStore.addMoney(change.amount)
+        } else if (change.type === 'reputation') {
+          gameStore.addReputation(change.amount)
+        } else if (change.type === 'inventory') {
+          const inv = inventory.value.find(i => i.itemId === change.itemId)
+          if (inv) {
+            inv.quantity = Math.max(0, inv.quantity - change.amount)
+            if (inv.quantity <= 0) {
+              inventory.value = inventory.value.filter(i => i.itemId !== change.itemId)
+            }
+          }
+        }
+      }
+
+      const order = orders.value.find(o => o.id === record.orderId)
+      if (order) {
+        order.status = 'rollback'
+        order.rollbackReason = record.reason
+        if (order.itemId) {
+          const item = items.value.find(i => i.id === order.itemId)
+          if (item) {
+            item.stock = Math.min(item.maxStock, item.stock + order.quantity)
+          }
+        }
+      }
+
+      record.status = 'success'
+      record.executedAt = Date.now()
+      return { success: true, message: '资产回滚成功' }
+    } catch (e: any) {
+      record.status = 'failed'
+      record.executedAt = Date.now()
+      return { success: false, message: `回滚失败：${e.message || '未知错误'}` }
+    }
+  }
+
   function validatePurchase(itemId?: string, quantity: number = 1): { valid: boolean; message: string; error?: string } {
     if (!itemId) {
       if (cart.value.length === 0) {
@@ -211,6 +451,11 @@ export const useShopStore = defineStore('shop', () => {
 
     if (item.stock < quantity) {
       return { valid: false, message: `库存不足，仅剩 ${item.stock} 件`, error: `库存不足，仅剩 ${item.stock} 件` }
+    }
+
+    const limitValidation = validatePurchaseLimits(item, quantity)
+    if (!limitValidation.valid) {
+      return { valid: false, message: limitValidation.message, error: limitValidation.message }
     }
 
     const purchasedCount = purchaseHistory.value[itemId] || 0
@@ -312,28 +557,75 @@ export const useShopStore = defineStore('shop', () => {
       reputation: unitPrice.reputation !== undefined ? unitPrice.reputation * quantity : undefined
     }
 
+    const assetChanges: AssetChange[] = []
+
     gameStore.addMoney(-totalPrice.money)
+    assetChanges.push({ type: 'money', target: 'player', amount: totalPrice.money })
     if (totalPrice.reputation !== undefined) {
       gameStore.addReputation(-totalPrice.reputation)
+      assetChanges.push({ type: 'reputation', target: 'player', amount: totalPrice.reputation })
     }
 
     item.stock -= quantity
 
-    purchaseHistory.value[itemId] = (purchaseHistory.value[itemId] || 0) + quantity
+    recordLimitPurchase(itemId, quantity)
 
-    const existingInventory = inventory.value.find(inv => inv.itemId === itemId)
-    if (existingInventory) {
-      existingInventory.quantity += quantity
+    const orderId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    let unpackedItems: UnpackedItem[] | undefined
+    const isGiftPack = item.category === 'gift_pack' && !!item.giftPack
+
+    if (isGiftPack && item.giftPack) {
+      unpackedItems = unpackGiftPack(item.giftPack, quantity)
+      if (item.giftPack.autoUnpack) {
+        for (const unpacked of unpackedItems) {
+          const existingInv = inventory.value.find(inv => inv.itemId === unpacked.itemId)
+          assetChanges.push({
+            type: 'inventory',
+            target: 'player',
+            amount: unpacked.quantity,
+            itemId: unpacked.itemId
+          })
+        }
+        addUnpackedItemsToInventory(unpackedItems)
+      } else {
+        const existingInventory = inventory.value.find(inv => inv.itemId === itemId)
+        if (existingInventory) {
+          existingInventory.quantity += quantity
+        } else {
+          inventory.value.push({
+            itemId,
+            quantity,
+            acquiredAt: Date.now()
+          })
+        }
+        assetChanges.push({
+          type: 'inventory',
+          target: 'player',
+          amount: quantity,
+          itemId
+        })
+      }
     } else {
-      inventory.value.push({
-        itemId,
-        quantity,
-        acquiredAt: Date.now()
+      const existingInventory = inventory.value.find(inv => inv.itemId === itemId)
+      if (existingInventory) {
+        existingInventory.quantity += quantity
+      } else {
+        inventory.value.push({
+          itemId,
+          quantity,
+          acquiredAt: Date.now()
+        })
+      }
+      assetChanges.push({
+        type: 'inventory',
+        target: 'player',
+        amount: quantity,
+        itemId
       })
     }
 
     const order: ShopOrder = {
-      id: `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: orderId,
       itemId,
       itemName: item.name,
       quantity,
@@ -342,9 +634,13 @@ export const useShopStore = defineStore('shop', () => {
       discountApplied: discount ? discount.discountPercent : 0,
       status: 'completed',
       createdAt: Date.now(),
-      completedAt: Date.now()
+      completedAt: Date.now(),
+      isGiftPack,
+      unpackedItems
     }
     orders.value.push(order)
+
+    createRollbackRecord(orderId, assetChanges)
 
     achievementStore.trackBehavior('shop_purchase', {
       itemId,
@@ -352,7 +648,8 @@ export const useShopStore = defineStore('shop', () => {
       quantity,
       totalPrice,
       category: item.category,
-      rarity: item.rarity
+      rarity: item.rarity,
+      isGiftPack
     })
 
     try {
@@ -366,7 +663,7 @@ export const useShopStore = defineStore('shop', () => {
       }
     } catch {}
 
-    if (item.category === 'buff' && item.effect.type === 'buff') {
+    if (!isGiftPack && item.category === 'buff' && item.effect.type === 'buff') {
       applyItemEffect(item, quantity)
       const invItem = inventory.value.find(inv => inv.itemId === itemId)
       if (invItem) {
@@ -379,7 +676,18 @@ export const useShopStore = defineStore('shop', () => {
         success: true,
         message: `成功购买并使用 ${item.name} x${quantity}！`,
         order,
-        inventoryItem: existingInventory
+        inventoryItem: inventory.value.find(inv => inv.itemId === itemId)
+      }
+    }
+
+    if (isGiftPack && unpackedItems) {
+      const names = unpackedItems.map(u => `${u.itemName}x${u.quantity}`).join('、')
+      return {
+        success: true,
+        message: `成功购买 ${item.name} x${quantity}！拆封获得：${names}`,
+        order,
+        unpackedItems,
+        inventoryItem: inventory.value.find(inv => inv.itemId === itemId)
       }
     }
 
@@ -387,7 +695,7 @@ export const useShopStore = defineStore('shop', () => {
       success: true,
       message: `成功购买 ${item.name} x${quantity}！`,
       order,
-      inventoryItem: existingInventory || inventory.value.find(inv => inv.itemId === itemId)
+      inventoryItem: inventory.value.find(inv => inv.itemId === itemId)
     }
   }
 
@@ -676,7 +984,11 @@ export const useShopStore = defineStore('shop', () => {
       discounts: discounts.value.map(d => ({ ...d })),
       orders: orders.value.map(o => ({ ...o })),
       inventory: inventory.value.map(inv => ({ ...inv })),
-      purchaseHistory: { ...purchaseHistory.value }
+      purchaseHistory: { ...purchaseHistory.value },
+      dailyPurchaseHistory: { ...dailyPurchaseHistory.value },
+      weeklyPurchaseHistory: { ...weeklyPurchaseHistory.value },
+      monthlyPurchaseHistory: { ...monthlyPurchaseHistory.value },
+      rollbackRecords: rollbackRecords.value.map(r => ({ ...r }))
     }
   }
 
@@ -686,6 +998,10 @@ export const useShopStore = defineStore('shop', () => {
     orders.value = data.orders.map(o => ({ ...o }))
     inventory.value = data.inventory.map(inv => ({ ...inv }))
     purchaseHistory.value = { ...data.purchaseHistory }
+    dailyPurchaseHistory.value = { ...(data.dailyPurchaseHistory || {}) }
+    weeklyPurchaseHistory.value = { ...(data.weeklyPurchaseHistory || {}) }
+    monthlyPurchaseHistory.value = { ...(data.monthlyPurchaseHistory || {}) }
+    rollbackRecords.value = (data.rollbackRecords || []).map(r => ({ ...r }))
   }
 
   function resetShop() {
@@ -694,8 +1010,13 @@ export const useShopStore = defineStore('shop', () => {
     orders.value = []
     inventory.value = []
     purchaseHistory.value = {}
+    dailyPurchaseHistory.value = {}
+    weeklyPurchaseHistory.value = {}
+    monthlyPurchaseHistory.value = {}
+    rollbackRecords.value = []
     selectedCategory.value = 'all'
     showOnlyOnSale.value = false
+    cart.value = []
   }
 
   return {
@@ -704,6 +1025,10 @@ export const useShopStore = defineStore('shop', () => {
     orders,
     inventory,
     purchaseHistory,
+    dailyPurchaseHistory,
+    weeklyPurchaseHistory,
+    monthlyPurchaseHistory,
+    rollbackRecords,
     selectedCategory,
     showOnlyOnSale,
     activeDiscounts,
@@ -718,6 +1043,12 @@ export const useShopStore = defineStore('shop', () => {
     getItemById,
     isItemUnlocked,
     getUnlockConditionText,
+    getPurchaseLimitText,
+    validatePurchaseLimits,
+    getGiftPackPreviewItems,
+    unpackGiftPack,
+    createRollbackRecord,
+    executeRollback,
     validatePurchase,
     purchaseItem,
     useItem,

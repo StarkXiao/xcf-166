@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useShopStore } from '../../stores/shopStore'
-import { ShoppingBag, Clock, Tag, CheckCircle } from 'lucide-vue-next'
+import { ShoppingBag, Clock, Tag, CheckCircle, Gift, ChevronDown, ChevronUp, RefreshCw } from 'lucide-vue-next'
 
 const props = defineProps<{
   limit?: number
@@ -31,16 +31,44 @@ function formatDate(timestamp: number): string {
   })
 }
 
+const expandedOrders = ref<Set<string>>(new Set())
+
+function toggleExpand(orderId: string) {
+  if (expandedOrders.value.has(orderId)) {
+    expandedOrders.value.delete(orderId)
+  } else {
+    expandedOrders.value.add(orderId)
+  }
+}
+
+function isExpanded(orderId: string): boolean {
+  return expandedOrders.value.has(orderId)
+}
+
+function handleRollback(orderId: string) {
+  if (confirm('确定要回滚该订单吗？这将返还金币和声望，并从背包中移除物品。')) {
+    const record = shopStore.rollbackRecords.find(r => r.orderId === orderId)
+    if (record) {
+      const result = shopStore.executeRollback(record.id)
+      alert(result.message)
+    } else {
+      alert('未找到回滚记录')
+    }
+  }
+}
+
 const statusText: Record<string, string> = {
   pending: '处理中',
   completed: '已完成',
-  refunded: '已退款'
+  refunded: '已退款',
+  rollback: '已回滚'
 }
 
 const statusColor: Record<string, string> = {
   pending: 'text-amber-400 bg-amber-500/20',
   completed: 'text-green-400 bg-green-500/20',
-  refunded: 'text-red-400 bg-red-500/20'
+  refunded: 'text-red-400 bg-red-500/20',
+  rollback: 'text-gray-400 bg-gray-500/20'
 }
 </script>
 
@@ -70,19 +98,44 @@ const statusColor: Record<string, string> = {
       >
         <div class="flex items-start justify-between mb-2">
           <div>
-            <div class="font-medium text-white">{{ order.itemName }}</div>
+            <div class="font-medium text-white flex items-center gap-2">
+              {{ order.itemName }}
+              <span v-if="order.isGiftPack" class="text-xs px-2 py-0.5 bg-purple-500/30 text-purple-300 rounded-full flex items-center gap-1">
+                <Gift class="w-3 h-3" />
+                礼包
+              </span>
+            </div>
             <div class="flex items-center gap-1 text-xs text-gray-500 mt-1">
               <Clock class="w-3 h-3" />
               {{ formatDate(order.createdAt) }}
+              <span v-if="order.rollbackReason" class="text-red-400 ml-2">回滚原因：{{ order.rollbackReason }}</span>
             </div>
           </div>
-          <span
-            class="px-2 py-0.5 rounded text-xs font-medium flex items-center gap-1"
-            :class="statusColor[order.status]"
-          >
-            <CheckCircle class="w-3 h-3" />
-            {{ statusText[order.status] }}
-          </span>
+          <div class="flex items-center gap-2">
+            <button
+              v-if="order.status === 'completed' && order.isGiftPack && order.unpackedItems"
+              @click="toggleExpand(order.id)"
+              class="p-1 hover:bg-gray-700 rounded transition-colors text-gray-400"
+            >
+              <ChevronDown v-if="!isExpanded(order.id)" class="w-4 h-4" />
+              <ChevronUp v-else class="w-4 h-4" />
+            </button>
+            <button
+              v-if="order.status === 'completed'"
+              @click="handleRollback(order.id)"
+              class="p-1 hover:bg-red-500/20 rounded transition-colors text-gray-400 hover:text-red-400"
+              title="回滚订单"
+            >
+              <RefreshCw class="w-4 h-4" />
+            </button>
+            <span
+              class="px-2 py-0.5 rounded text-xs font-medium flex items-center gap-1"
+              :class="statusColor[order.status]"
+            >
+              <CheckCircle class="w-3 h-3" />
+              {{ statusText[order.status] }}
+            </span>
+          </div>
         </div>
 
         <div class="flex items-center justify-between text-sm">
@@ -108,6 +161,23 @@ const statusColor: Record<string, string> = {
             </div>
           </div>
         </div>
+
+        <Transition name="fade">
+          <div v-if="isExpanded(order.id) && order.isGiftPack && order.unpackedItems" class="mt-3 pt-3 border-t border-gray-700">
+            <div class="text-xs text-gray-400 mb-2">拆封获得：</div>
+            <div class="flex flex-wrap gap-2">
+              <div
+                v-for="item in order.unpackedItems"
+                :key="item.itemId"
+                class="flex items-center gap-1.5 px-2 py-1 bg-gray-800 rounded-lg text-sm"
+              >
+                <span>{{ item.icon || '📦' }}</span>
+                <span class="text-white">{{ item.itemName }}</span>
+                <span class="text-gray-400">x{{ item.quantity }}</span>
+              </div>
+            </div>
+          </div>
+        </Transition>
       </div>
     </div>
 
@@ -124,3 +194,16 @@ const statusColor: Record<string, string> = {
     </div>
   </div>
 </template>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: all 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  max-height: 0;
+}
+</style>
