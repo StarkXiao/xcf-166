@@ -339,10 +339,8 @@ export const useShopStore = defineStore('shop', () => {
 
   function addUnpackedItemsToInventory(unpackedItems: UnpackedItem[]): {
     buffSnapshots: AppliedBuffSnapshot[]
-    instantEffectSnapshots: InstantEffectSnapshot[]
   } {
     const buffSnapshots: AppliedBuffSnapshot[] = []
-    const instantEffectSnapshots: InstantEffectSnapshot[] = []
 
     for (const unpacked of unpackedItems) {
       const existing = inventory.value.find(inv => inv.itemId === unpacked.itemId)
@@ -372,27 +370,9 @@ export const useShopStore = defineStore('shop', () => {
           }
         }
       }
-
-      if (shopItem && shopItem.effect.type === 'instant') {
-        const eff = shopItem.effect
-        if (eff.target === 'sanity' || eff.target === 'money' || eff.target === 'reputation') {
-          instantEffectSnapshots.push({
-            target: eff.target,
-            value: eff.value * unpacked.quantity
-          })
-        }
-        if (eff.target === 'buff' && eff.special === 'anomaly_immunity_one_time') {
-          const prevBuffCount = characterStore.activeBuffs.length
-          applyItemEffect(shopItem, unpacked.quantity)
-          const newBuffs = characterStore.activeBuffs.slice(prevBuffCount)
-          for (const b of newBuffs) {
-            buffSnapshots.push({ buffId: b.id, sourceSkillId: b.sourceSkillId })
-          }
-        }
-      }
     }
 
-    return { buffSnapshots, instantEffectSnapshots }
+    return { buffSnapshots }
   }
 
   function createRollbackRecord(orderId: string, changes: AssetChange[], reason?: string, orderItemId?: string, orderQuantity?: number): RollbackRecord {
@@ -647,7 +627,6 @@ export const useShopStore = defineStore('shop', () => {
 
     const assetChanges: AssetChange[] = []
     const allBuffSnapshots: AppliedBuffSnapshot[] = []
-    const allInstantEffectSnapshots: InstantEffectSnapshot[] = []
 
     gameStore.addMoney(-totalPrice.money)
     assetChanges.push({ type: 'money', target: 'player', amount: totalPrice.money })
@@ -693,7 +672,6 @@ export const useShopStore = defineStore('shop', () => {
         }
         const unpackResult = addUnpackedItemsToInventory(unpackedItems)
         allBuffSnapshots.push(...unpackResult.buffSnapshots)
-        allInstantEffectSnapshots.push(...unpackResult.instantEffectSnapshots)
       } else {
         const existingInventory = inventory.value.find(inv => inv.itemId === itemId)
         if (existingInventory) {
@@ -747,39 +725,12 @@ export const useShopStore = defineStore('shop', () => {
       }
     }
 
-    if (!isGiftPack && item.effect.type === 'instant') {
-      const eff = item.effect
-      if (eff.target === 'sanity' || eff.target === 'money' || eff.target === 'reputation') {
-        allInstantEffectSnapshots.push({
-          target: eff.target,
-          value: eff.value * quantity
-        })
-      }
-      if (eff.target === 'buff' && eff.special === 'anomaly_immunity_one_time') {
-        const prevBuffCount = characterStore.activeBuffs.length
-        applyItemEffect(item, quantity)
-        const newBuffs = characterStore.activeBuffs.slice(prevBuffCount)
-        for (const b of newBuffs) {
-          allBuffSnapshots.push({ buffId: b.id, sourceSkillId: b.sourceSkillId })
-        }
-      }
-    }
-
     if (allBuffSnapshots.length > 0) {
       assetChanges.push({
         type: 'buff',
         target: 'character',
         amount: allBuffSnapshots.length,
         buffSnapshots: allBuffSnapshots
-      })
-    }
-
-    if (allInstantEffectSnapshots.length > 0) {
-      assetChanges.push({
-        type: 'instant_effect',
-        target: 'player',
-        amount: allInstantEffectSnapshots.reduce((s, e) => s + e.value, 0),
-        instantEffectSnapshots: allInstantEffectSnapshots
       })
     }
 
