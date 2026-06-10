@@ -352,6 +352,7 @@ const statusLabels: Record<ActivityStatus, string> = {
   paused: '已暂停',
   ended: '已结束',
   cancelled: '已取消',
+  archived: '已归档',
 }
 
 const trackEventTypeLabels: Record<TrackEventType, string> = {

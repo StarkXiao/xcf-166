@@ -30,7 +30,62 @@
       </button>
     </div>
 
-    <div class="grid grid-cols-4 gap-4">
+    <div v-if="warningActivities.length > 0" class="space-y-2">
+      <div
+        v-for="wa in warningActivities"
+        :key="wa.id"
+        class="rounded-xl p-4 border flex items-center gap-4"
+        :class="wa.countdown.warningLevel === 'urgent'
+          ? 'bg-red-900/30 border-red-500/50 animate-pulse'
+          : 'bg-yellow-900/30 border-yellow-500/50'"
+      >
+        <div
+          class="w-10 h-10 rounded-lg flex items-center justify-center"
+          :class="wa.countdown.warningLevel === 'urgent'
+            ? 'bg-red-500/30'
+            : 'bg-yellow-500/30'"
+        >
+          <AlertTriangle
+            class="w-5 h-5"
+            :class="wa.countdown.warningLevel === 'urgent'
+              ? 'text-red-400'
+              : 'text-yellow-400'"
+          />
+        </div>
+        <div class="flex-1">
+          <div class="flex items-center gap-2">
+            <p class="font-medium text-white">{{ wa.config.name }}</p>
+            <span
+              class="px-2 py-0.5 text-xs rounded-full font-medium"
+              :class="wa.countdown.warningLevel === 'urgent'
+                ? 'bg-red-500/20 text-red-400'
+                : 'bg-yellow-500/20 text-yellow-400'"
+            >
+              {{ wa.countdown.warningLevel === 'urgent' ? '即将到期' : '即将结束' }}
+            </span>
+          </div>
+          <p class="text-sm text-gray-400 mt-1">
+            剩余:
+            <span
+              class="font-mono font-bold"
+              :class="wa.countdown.warningLevel === 'urgent'
+                ? 'text-red-400'
+                : 'text-yellow-400'"
+            >
+              {{ wa.countdown.days }}天 {{ wa.countdown.hours }}时 {{ wa.countdown.minutes }}分 {{ wa.countdown.seconds }}秒
+            </span>
+          </p>
+        </div>
+        <button
+          @click="editActivity(wa.id)"
+          class="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+        >
+          查看详情
+        </button>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-5 gap-4">
       <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
         <div class="flex items-center justify-between">
           <div>
@@ -75,6 +130,17 @@
           </div>
         </div>
       </div>
+      <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm text-gray-400">已归档</p>
+            <p class="text-2xl font-bold text-blue-400 mt-1">{{ activityStore.archivedActivities.length }}</p>
+          </div>
+          <div class="w-12 h-12 rounded-lg bg-blue-500/20 flex items-center justify-center">
+            <Archive class="w-6 h-6 text-blue-400" />
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
@@ -84,9 +150,9 @@
             <th class="px-6 py-4 text-left text-sm font-medium text-gray-300">活动名称</th>
             <th class="px-6 py-4 text-left text-sm font-medium text-gray-300">模板类型</th>
             <th class="px-6 py-4 text-left text-sm font-medium text-gray-300">状态</th>
+            <th class="px-6 py-4 text-left text-sm font-medium text-gray-300">倒计时</th>
             <th class="px-6 py-4 text-left text-sm font-medium text-gray-300">时间范围</th>
-            <th class="px-6 py-4 text-left text-sm font-medium text-gray-300">优先级</th>
-            <th class="px-6 py-4 text-left text-sm font-medium text-gray-300">创建人</th>
+            <th class="px-6 py-4 text-left text-sm font-medium text-gray-300">归档</th>
             <th class="px-6 py-4 text-right text-sm font-medium text-gray-300">操作</th>
           </tr>
         </thead>
@@ -119,6 +185,17 @@
                 {{ statusLabels[activity.status] }}
               </span>
             </td>
+            <td class="px-6 py-4">
+              <div v-if="activity.status === 'active' || activity.status === 'paused'">
+                <span
+                  class="text-sm font-mono font-medium"
+                  :class="getCountdownClass(activity.id)"
+                >
+                  {{ getCountdownText(activity.id) }}
+                </span>
+              </div>
+              <span v-else class="text-xs text-gray-500">-</span>
+            </td>
             <td class="px-6 py-4 text-sm text-gray-300">
               <div>
                 <p>{{ formatDate(activity.config.schedule.startTime) }}</p>
@@ -126,11 +203,17 @@
               </div>
             </td>
             <td class="px-6 py-4">
-              <span class="px-2 py-1 text-xs rounded bg-gray-700 text-gray-300">
-                P{{ activity.config.priority }}
+              <span
+                v-if="activity.archiveStatus"
+                class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full"
+                :class="archiveStatusStyles[activity.archiveStatus] || 'bg-gray-500/20 text-gray-400'"
+              >
+                {{ archiveStatusLabels[activity.archiveStatus] || '未知' }}
+              </span>
+              <span v-else class="text-xs text-gray-500">
+                {{ activity.status === 'ended' ? '待归档' : '-' }}
               </span>
             </td>
-            <td class="px-6 py-4 text-sm text-gray-300">{{ activity.createdBy }}</td>
             <td class="px-6 py-4 text-right">
               <div class="flex items-center justify-end gap-2">
                 <button
@@ -171,6 +254,30 @@
                   title="提交审核"
                 >
                   <Send class="w-4 h-4" />
+                </button>
+                <button
+                  v-if="activity.status === 'ended' && !activity.archiveStatus"
+                  @click="archiveActivityAction(activity.id)"
+                  class="p-2 text-gray-400 hover:text-blue-400 hover:bg-gray-700 rounded-lg transition-colors"
+                  title="归档"
+                >
+                  <Archive class="w-4 h-4" />
+                </button>
+                <button
+                  v-if="activity.archiveStatus === 'archived'"
+                  @click="restoreActivity(activity.id)"
+                  class="p-2 text-gray-400 hover:text-green-400 hover:bg-gray-700 rounded-lg transition-colors"
+                  title="恢复数据"
+                >
+                  <RotateCcw class="w-4 h-4" />
+                </button>
+                <button
+                  v-if="activity.archiveStatus === 'archived'"
+                  @click="downloadArchive(activity.id)"
+                  class="p-2 text-gray-400 hover:text-purple-400 hover:bg-gray-700 rounded-lg transition-colors"
+                  title="下载归档"
+                >
+                  <Download class="w-4 h-4" />
                 </button>
                 <button
                   @click="deleteActivity(activity.id)"
@@ -228,7 +335,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Plus,
@@ -249,15 +356,39 @@ import {
   Gift,
   ShoppingBag,
   Layout,
+  AlertTriangle,
+  Archive,
+  RotateCcw,
+  Download,
 } from 'lucide-vue-next'
 import { useActivityStore } from '@/stores/activityStore'
-import type { ActivityStatus, Activity } from '@/types/activity'
+import type { ActivityStatus, Activity, ArchiveStatus } from '@/types/activity'
 
 const router = useRouter()
 const activityStore = useActivityStore()
 
 const currentStatus = ref<string>('all')
 const showCreateModal = ref(false)
+let countdownTimer: ReturnType<typeof setInterval> | null = null
+const tickCounter = ref(0)
+
+onMounted(() => {
+  countdownTimer = setInterval(() => {
+    tickCounter.value++
+  }, 1000)
+})
+
+onUnmounted(() => {
+  if (countdownTimer) {
+    clearInterval(countdownTimer)
+    countdownTimer = null
+  }
+})
+
+const warningActivities = computed(() => {
+  tickCounter.value
+  return activityStore.getActivitiesWithWarnings()
+})
 
 const statusTabs = [
   { label: '全部', value: 'all' },
@@ -265,6 +396,7 @@ const statusTabs = [
   { label: '待审核', value: 'pending' },
   { label: '草稿', value: 'draft' },
   { label: '已结束', value: 'ended' },
+  { label: '已归档', value: 'archived' },
 ]
 
 const statusLabels: Record<ActivityStatus, string> = {
@@ -274,6 +406,7 @@ const statusLabels: Record<ActivityStatus, string> = {
   paused: '已暂停',
   ended: '已结束',
   cancelled: '已取消',
+  archived: '已归档',
 }
 
 const statusStyles: Record<ActivityStatus, string> = {
@@ -283,6 +416,7 @@ const statusStyles: Record<ActivityStatus, string> = {
   paused: 'bg-orange-500/20 text-orange-400',
   ended: 'bg-red-500/20 text-red-400',
   cancelled: 'bg-gray-500/20 text-gray-400',
+  archived: 'bg-blue-500/20 text-blue-400',
 }
 
 const statusIcons: Record<ActivityStatus, any> = {
@@ -292,6 +426,21 @@ const statusIcons: Record<ActivityStatus, any> = {
   paused: Pause,
   ended: Square,
   cancelled: Square,
+  archived: Archive,
+}
+
+const archiveStatusLabels: Record<ArchiveStatus, string> = {
+  none: '未归档',
+  archiving: '归档中',
+  archived: '已归档',
+  failed: '归档失败',
+}
+
+const archiveStatusStyles: Record<ArchiveStatus, string> = {
+  none: 'bg-gray-500/20 text-gray-400',
+  archiving: 'bg-yellow-500/20 text-yellow-400 animate-pulse',
+  archived: 'bg-blue-500/20 text-blue-400',
+  failed: 'bg-red-500/20 text-red-400',
 }
 
 const filteredActivities = computed(() => {
@@ -304,6 +453,23 @@ const filteredActivities = computed(() => {
 function getStatusCount(status: string) {
   if (status === 'all') return activityStore.activities.length
   return activityStore.activities.filter(a => a.status === status).length
+}
+
+function getCountdownText(activityId: string): string {
+  tickCounter.value
+  const info = activityStore.getCountdownInfo(activityId)
+  if (info.isExpired) return '已过期'
+  if (info.days > 0) return `${info.days}天 ${info.hours}时`
+  if (info.hours > 0) return `${info.hours}时 ${info.minutes}分`
+  return `${info.minutes}分 ${info.seconds}秒`
+}
+
+function getCountdownClass(activityId: string): string {
+  tickCounter.value
+  const info = activityStore.getCountdownInfo(activityId)
+  if (info.warningLevel === 'urgent') return 'text-red-400 font-bold'
+  if (info.warningLevel === 'warning') return 'text-yellow-400'
+  return 'text-green-400'
 }
 
 function getTemplateName(templateId: string) {
@@ -370,6 +536,30 @@ function deleteActivity(id: string) {
   if (confirm('确定要删除此活动吗？此操作不可撤销。')) {
     activityStore.deleteActivity(id)
   }
+}
+
+function archiveActivityAction(id: string) {
+  if (confirm('确定要归档此活动吗？归档后将清理活动相关的实时数据，但归档数据仍可恢复。')) {
+    activityStore.archiveActivity(id)
+  }
+}
+
+function restoreActivity(id: string) {
+  if (confirm('确定要从归档恢复此活动的数据吗？')) {
+    activityStore.restoreFromArchive(id)
+  }
+}
+
+function downloadArchive(id: string) {
+  const data = activityStore.exportArchive(id)
+  if (!data) return
+  const blob = new Blob([data], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `archive_${id}_${Date.now()}.json`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 function selectTemplate(templateId: string) {

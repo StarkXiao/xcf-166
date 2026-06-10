@@ -11,6 +11,16 @@ import type {
   TrackEventType,
   EventQueryParams,
   AggregatedStatistics,
+  CountdownInfo,
+  CountdownWarningLevel,
+  ActivityStage,
+  ConditionValidation,
+  ConditionValidationReport,
+  RewardReissueRecord,
+  RewardReissueStatus,
+  ActivityArchive,
+  ArchiveStatus,
+  TriggerCondition,
 } from '@/types/activity'
 import { mockTemplates, mockActivities, mockStatistics, mockLogs, generateMockEvents } from '@/game/data/activityTemplates'
 
@@ -19,6 +29,14 @@ const STORAGE_KEYS = {
   EVENTS: 'activity_events',
   LOGS: 'activity_logs',
   STATISTICS: 'activity_statistics',
+  STAGES: 'activity_stages',
+  REISSUE_RECORDS: 'activity_reissue_records',
+  ARCHIVES: 'activity_archives',
+}
+
+const WARNING_THRESHOLDS = {
+  URGENT: 24 * 60 * 60 * 1000,
+  WARNING: 3 * 24 * 60 * 60 * 1000,
 }
 
 function loadFromStorage<T>(key: string, defaultValue: T): T {
@@ -49,11 +67,17 @@ export const useActivityStore = defineStore('activity', () => {
   const logs = ref<ActivityLog[]>(loadFromStorage(STORAGE_KEYS.LOGS, [...mockLogs]))
   const events = ref<ActivityEvent[]>(loadFromStorage(STORAGE_KEYS.EVENTS, generateMockEvents()))
   const loading = ref(false)
+  const stages = ref<Record<string, ActivityStage[]>>(loadFromStorage(STORAGE_KEYS.STAGES, {}))
+  const reissueRecords = ref<RewardReissueRecord[]>(loadFromStorage(STORAGE_KEYS.REISSUE_RECORDS, []))
+  const archives = ref<ActivityArchive[]>(loadFromStorage(STORAGE_KEYS.ARCHIVES, []))
 
   watch(activities, (val) => saveToStorage(STORAGE_KEYS.ACTIVITIES, val), { deep: true })
   watch(events, (val) => saveToStorage(STORAGE_KEYS.EVENTS, val), { deep: true })
   watch(logs, (val) => saveToStorage(STORAGE_KEYS.LOGS, val), { deep: true })
   watch(statistics, (val) => saveToStorage(STORAGE_KEYS.STATISTICS, val), { deep: true })
+  watch(stages, (val) => saveToStorage(STORAGE_KEYS.STAGES, val), { deep: true })
+  watch(reissueRecords, (val) => saveToStorage(STORAGE_KEYS.REISSUE_RECORDS, val), { deep: true })
+  watch(archives, (val) => saveToStorage(STORAGE_KEYS.ARCHIVES, val), { deep: true })
 
   const activeActivities = computed(() =>
     activities.value.filter(a => a.status === 'active'),
@@ -546,15 +570,493 @@ export const useActivityStore = defineStore('activity', () => {
     }
   }
 
+  const archivedActivities = computed(() =>
+    activities.value.filter(a => a.archiveStatus === 'archived'),
+  )
+
+  function getCountdownInfo(activityId: string): CountdownInfo {
+    const activity = activities.value.find(a => a.id === activityId)
+    if (!activity) {
+      return { remainingMs: 0, days: 0, hours: 0, minutes: 0, seconds: 0, warningLevel: 'expired', isExpired: true }
+    }
+
+    const now = Date.now()
+    const endTime = activity.config.schedule.endTime
+    const remainingMs = Math.max(0, endTime - now)
+    const isExpired = remainingMs <= 0
+
+    const days = Math.floor(remainingMs / (24 * 60 * 60 * 1000))
+    const hours = Math.floor((remainingMs % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000))
+    const minutes = Math.floor((remainingMs % (60 * 60 * 1000)) / (60 * 1000))
+    const seconds = Math.floor((remainingMs % (60 * 1000)) / 1000)
+
+    const customThreshold = activity.config.countdownWarningThresholdMs
+    let warningLevel: CountdownWarningLevel = 'safe'
+    if (isExpired) {
+      warningLevel = 'expired'
+    } else if (remainingMs <= (customThreshold ?? WARNING_THRESHOLDS.URGENT)) {
+      warningLevel = 'urgent'
+    } else if (remainingMs <= WARNING_THRESHOLDS.WARNING) {
+      warningLevel = 'warning'
+    }
+
+    return { remainingMs, days, hours, minutes, seconds, warningLevel, isExpired }
+  }
+
+  function getActivitiesWithWarnings(): Array<Activity & { countdown: CountdownInfo }> {
+    return activities.value
+      .filter(a => a.status === 'active')
+      .map(a => ({ ...a, countdown: getCountdownInfo(a.id) }))
+      .filter(a => a.countdown.warningLevel !== 'safe')
+      .sort((a, b) => a.countdown.remainingMs - b.countdown.remainingMs)
+  }
+
+  function addStage(activityId: string, stage: Omit<ActivityStage, 'id' | 'isUnlocked' | 'unlockedAt'>) {
+    if (!stages.value[activityId]) {
+      stages.value[activityId] = []
+    }
+    const newStage: ActivityStage = {
+      ...stage,
+      id: generateId('stage'),
+      isUnlocked: stage.unlockType === 'manual' ? false : false,
+    }
+    stages.value[activityId].push(newStage)
+
+    const activity = activities.value.find(a => a.id === activityId)
+    if (activity) {
+      activity.config.stages = [...(stages.value[activityId] || [])]
+      activity.updatedAt = Date.now()
+    }
+
+    addLog({
+      activityId,
+      playerId: 'admin',
+      eventType: 'view',
+      metadata: { action: 'add_stage', stageName: stage.name },
+    })
+  }
+
+  function updateStage(activityId: string, stageId: string, updates: Partial<ActivityStage>) {
+    const activityStages = stages.value[activityId]
+    if (!activityStages) return
+
+    const index = activityStages.findIndex(s => s.id === stageId)
+    if (index === -1) return
+
+    activityStages[index] = { ...activityStages[index], ...updates }
+    stages.value[activityId] = [...activityStages]
+
+    const activity = activities.value.find(a => a.id === activityId)
+    if (activity) {
+      activity.config.stages = [...activityStages]
+      activity.updatedAt = Date.now()
+    }
+  }
+
+  function removeStage(activityId: string, stageId: string) {
+    const activityStages = stages.value[activityId]
+    if (!activityStages) return
+
+    stages.value[activityId] = activityStages.filter(s => s.id !== stageId)
+
+    const activity = activities.value.find(a => a.id === activityId)
+    if (activity) {
+      activity.config.stages = [...(stages.value[activityId] || [])]
+      activity.updatedAt = Date.now()
+    }
+  }
+
+  function unlockStage(activityId: string, stageId: string) {
+    const activityStages = stages.value[activityId]
+    if (!activityStages) return
+
+    const stage = activityStages.find(s => s.id === stageId)
+    if (!stage || stage.isUnlocked) return
+
+    stage.isUnlocked = true
+    stage.unlockedAt = Date.now()
+    stages.value[activityId] = [...activityStages]
+
+    const activity = activities.value.find(a => a.id === activityId)
+    if (activity) {
+      activity.config.stages = [...activityStages]
+      activity.updatedAt = Date.now()
+    }
+
+    addLog({
+      activityId,
+      playerId: 'admin',
+      eventType: 'view',
+      metadata: { action: 'unlock_stage', stageId, stageName: stage.name },
+    })
+  }
+
+  function checkStageUnlocks(activityId: string) {
+    const activityStages = stages.value[activityId]
+    if (!activityStages) return
+
+    const now = Date.now()
+    activityStages.forEach(stage => {
+      if (stage.isUnlocked) return
+      if (stage.unlockType === 'time' && stage.unlockTime && now >= stage.unlockTime) {
+        stage.isUnlocked = true
+        stage.unlockedAt = now
+      }
+    })
+
+    stages.value[activityId] = [...activityStages]
+
+    const activity = activities.value.find(a => a.id === activityId)
+    if (activity) {
+      activity.config.stages = [...activityStages]
+    }
+  }
+
+  function getStages(activityId: string): ActivityStage[] {
+    return stages.value[activityId] || []
+  }
+
+  function validateConditions(
+    activityId: string,
+    playerId: string,
+    playerData: Record<string, number | string | boolean> = {},
+  ): ConditionValidationReport {
+    const activity = activities.value.find(a => a.id === activityId)
+    if (!activity) {
+      return {
+        activityId,
+        playerId,
+        validatedAt: Date.now(),
+        overallResult: false,
+        results: [{
+          conditionId: '0',
+          conditionType: 'custom_event',
+          description: '活动不存在',
+          result: 'error',
+          message: '找不到指定活动',
+        }],
+      }
+    }
+
+    const conditions = activity.config.triggerConditions
+    const results: ConditionValidation[] = []
+
+    function validateCondition(condition: TriggerCondition): ConditionValidation {
+      const actualValue = playerData[condition.type]
+      const result: ConditionValidation = {
+        conditionId: condition.id,
+        conditionType: condition.type,
+        description: condition.description,
+        result: 'fail',
+        expectedValue: condition.value,
+        operator: condition.operator,
+        message: '',
+      }
+
+      if (actualValue === undefined) {
+        result.result = 'skipped'
+        result.message = `缺少玩家数据: ${condition.type}`
+        return result
+      }
+
+      result.actualValue = typeof actualValue === 'boolean' ? String(actualValue) : actualValue
+
+      const numActual = Number(actualValue)
+      let passed = false
+
+      switch (condition.operator) {
+        case 'gt': passed = numActual > Number(condition.value); break
+        case 'gte': passed = numActual >= Number(condition.value); break
+        case 'lt': passed = numActual < Number(condition.value); break
+        case 'lte': passed = numActual <= Number(condition.value); break
+        case 'eq': passed = String(actualValue) === String(condition.value); break
+        case 'ne': passed = String(actualValue) !== String(condition.value); break
+        case 'between': {
+          const range = condition.value as [number, number]
+          passed = numActual >= range[0] && numActual <= range[1]
+          break
+        }
+        case 'contains': passed = String(actualValue).includes(String(condition.value)); break
+      }
+
+      result.result = passed ? 'pass' : 'fail'
+      result.message = passed
+        ? `${condition.description} - 通过`
+        : `${condition.description} - 未满足 (当前值: ${actualValue})`
+
+      return result
+    }
+
+    function validateGroup(group: typeof conditions): ConditionValidation[] {
+      const groupResults: ConditionValidation[] = []
+      for (const condition of group.conditions) {
+        groupResults.push(validateCondition(condition))
+      }
+      if (group.children) {
+        for (const child of group.children) {
+          groupResults.push(...validateGroup(child))
+        }
+      }
+      return groupResults
+    }
+
+    results.push(...validateGroup(conditions))
+
+    const logic = conditions.logic
+    const passCount = results.filter(r => r.result === 'pass').length
+    const failCount = results.filter(r => r.result === 'fail').length
+    const skipCount = results.filter(r => r.result === 'skipped').length
+    const actionableResults = results.filter(r => r.result !== 'skipped')
+
+    let overallResult = false
+    if (logic === 'AND') {
+      overallResult = actionableResults.length > 0 && actionableResults.every(r => r.result === 'pass')
+    } else {
+      overallResult = actionableResults.some(r => r.result === 'pass')
+    }
+
+    if (skipCount > 0 && failCount === 0 && passCount === 0) {
+      overallResult = false
+    }
+
+    return {
+      activityId,
+      playerId,
+      validatedAt: Date.now(),
+      overallResult,
+      results,
+    }
+  }
+
+  function reissueReward(
+    activityId: string,
+    playerId: string,
+    rewardId: string,
+    rewardName: string,
+    reason: string,
+  ): RewardReissueRecord {
+    const record: RewardReissueRecord = {
+      id: generateId('reissue'),
+      activityId,
+      playerId,
+      rewardId,
+      rewardName,
+      originalClaimAt: Date.now() - 60000,
+      reissueAt: Date.now(),
+      status: 'pending',
+      reason,
+      retryCount: 0,
+      metadata: {},
+    }
+
+    reissueRecords.value.unshift(record)
+
+    addLog({
+      activityId,
+      playerId,
+      eventType: 'view',
+      metadata: { action: 'reissue_reward', rewardId, rewardName, reason, reissueId: record.id },
+    })
+
+    processReissue(record.id)
+
+    return record
+  }
+
+  function processReissue(recordId: string) {
+    const record = reissueRecords.value.find(r => r.id === recordId)
+    if (!record || record.status === 'success') return
+
+    record.status = 'processing'
+    record.lastRetryAt = Date.now()
+
+    setTimeout(() => {
+      const success = Math.random() > 0.1
+      record.status = success ? 'success' : 'failed'
+      record.retryCount++
+      record.metadata.processedAt = Date.now()
+
+      if (success) {
+        const activity = activities.value.find(a => a.id === record.activityId)
+        if (activity) {
+          const stats = statistics.value[record.activityId]
+          if (stats) {
+            stats.rewardClaimedCount++
+          }
+        }
+
+        addLog({
+          activityId: record.activityId,
+          playerId: record.playerId,
+          eventType: 'claim',
+          rewardId: record.rewardId,
+          metadata: { action: 'reissue_success', rewardName: record.rewardName, reissueId: record.id },
+        })
+      }
+    }, 1500)
+  }
+
+  function retryReissue(recordId: string) {
+    const record = reissueRecords.value.find(r => r.id === recordId)
+    if (!record || record.status !== 'failed') return
+
+    if (record.retryCount >= 5) return
+
+    processReissue(recordId)
+  }
+
+  function batchReissueRewards(
+    activityId: string,
+    records: Array<{ playerId: string; rewardId: string; rewardName: string }>,
+    reason: string,
+  ): RewardReissueRecord[] {
+    return records.map(r => reissueReward(activityId, r.playerId, r.rewardId, r.rewardName, reason))
+  }
+
+  function getReissueRecords(activityId?: string): RewardReissueRecord[] {
+    if (activityId) {
+      return reissueRecords.value.filter(r => r.activityId === activityId)
+    }
+    return reissueRecords.value
+  }
+
+  function archiveActivity(activityId: string, archivedBy: string = 'admin'): ActivityArchive {
+    const activity = activities.value.find(a => a.id === activityId)
+    if (!activity) throw new Error('Activity not found')
+
+    const existing = archives.value.find(a => a.activityId === activityId)
+    if (existing && existing.archiveStatus === 'archived') {
+      return existing
+    }
+
+    const archive: ActivityArchive = {
+      id: generateId('archive'),
+      activityId,
+      activitySnapshot: JSON.parse(JSON.stringify(activity)),
+      statisticsSnapshot: statistics.value[activityId]
+        ? JSON.parse(JSON.stringify(statistics.value[activityId]))
+        : null,
+      eventsSnapshot: events.value.filter(e => e.activityId === activityId).map(e => ({ ...e })),
+      logsSnapshot: logs.value.filter(l => l.activityId === activityId).map(l => ({ ...l })),
+      aggregatedSnapshot: getAggregatedStatistics(activityId, 30),
+      archiveStatus: 'archiving',
+      archivedBy,
+      archiveSize: 0,
+    }
+
+    const archiveDataStr = JSON.stringify(archive)
+    archive.archiveSize = new Blob([archiveDataStr]).size
+
+    archives.value.unshift(archive)
+    activity.archiveStatus = 'archiving'
+
+    setTimeout(() => {
+      const archiveRef = archives.value.find(a => a.id === archive.id)
+      if (!archiveRef) return
+
+      archiveRef.archiveStatus = 'archived'
+      archiveRef.archivedAt = Date.now()
+
+      const activityRef = activities.value.find(a => a.id === activityId)
+      if (activityRef) {
+        activityRef.archiveStatus = 'archived'
+        activityRef.status = 'archived'
+        activityRef.updatedAt = Date.now()
+      }
+
+      events.value = events.value.filter(e => e.activityId !== activityId)
+      logs.value = logs.value.filter(l => l.activityId !== activityId)
+      delete statistics.value[activityId]
+
+      addLog({
+        activityId,
+        playerId: 'admin',
+        eventType: 'view',
+        metadata: { action: 'archive_activity', archiveId: archive.id, archivedBy },
+      })
+    }, 2000)
+
+    return archive
+  }
+
+  function getArchive(activityId: string): ActivityArchive | null {
+    return archives.value.find(a => a.activityId === activityId) || null
+  }
+
+  function restoreFromArchive(activityId: string): boolean {
+    const archive = archives.value.find(a => a.activityId === activityId)
+    if (!archive || archive.archiveStatus !== 'archived') return false
+
+    const restoredActivity = JSON.parse(JSON.stringify(archive.activitySnapshot))
+    restoredActivity.archiveStatus = undefined
+    restoredActivity.status = 'ended'
+    restoredActivity.updatedAt = Date.now()
+
+    const index = activities.value.findIndex(a => a.id === activityId)
+    if (index !== -1) {
+      activities.value[index] = restoredActivity
+    } else {
+      activities.value.push(restoredActivity)
+    }
+
+    if (archive.statisticsSnapshot) {
+      statistics.value[activityId] = JSON.parse(JSON.stringify(archive.statisticsSnapshot))
+    }
+
+    archive.eventsSnapshot.forEach(e => {
+      if (!events.value.find(ex => ex.id === e.id)) {
+        events.value.push({ ...e })
+      }
+    })
+
+    archive.logsSnapshot.forEach(l => {
+      if (!logs.value.find(lx => lx.id === l.id)) {
+        logs.value.unshift({ ...l })
+      }
+    })
+
+    addLog({
+      activityId,
+      playerId: 'admin',
+      eventType: 'view',
+      metadata: { action: 'restore_from_archive' },
+    })
+
+    return true
+  }
+
+  function exportArchive(activityId: string): string | null {
+    const archive = archives.value.find(a => a.activityId === activityId)
+    if (!archive) return null
+
+    const exportData = {
+      archive: {
+        id: archive.id,
+        activityId: archive.activityId,
+        archivedAt: archive.archivedAt,
+        archivedBy: archive.archivedBy,
+        archiveSize: archive.archiveSize,
+      },
+      activity: archive.activitySnapshot,
+      statistics: archive.statisticsSnapshot,
+      aggregated: archive.aggregatedSnapshot,
+      eventCount: archive.eventsSnapshot.length,
+      logCount: archive.logsSnapshot.length,
+      exportedAt: Date.now(),
+    }
+
+    return JSON.stringify(exportData, null, 2)
+  }
+
   function clearStorage() {
-    localStorage.removeItem(STORAGE_KEYS.ACTIVITIES)
-    localStorage.removeItem(STORAGE_KEYS.EVENTS)
-    localStorage.removeItem(STORAGE_KEYS.LOGS)
-    localStorage.removeItem(STORAGE_KEYS.STATISTICS)
+    Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key))
     activities.value = [...mockActivities]
     events.value = generateMockEvents()
     logs.value = [...mockLogs]
     statistics.value = { ...mockStatistics }
+    stages.value = {}
+    reissueRecords.value = []
+    archives.value = []
   }
 
   return {
@@ -565,10 +1067,14 @@ export const useActivityStore = defineStore('activity', () => {
     logs,
     events,
     loading,
+    stages,
+    reissueRecords,
+    archives,
     activeActivities,
     draftActivities,
     pendingActivities,
     endedActivities,
+    archivedActivities,
     loadTemplates,
     loadActivities,
     getActivityById,
@@ -595,6 +1101,24 @@ export const useActivityStore = defineStore('activity', () => {
     addLog,
     queryEvents,
     getAggregatedStatistics,
+    getCountdownInfo,
+    getActivitiesWithWarnings,
+    addStage,
+    updateStage,
+    removeStage,
+    unlockStage,
+    checkStageUnlocks,
+    getStages,
+    validateConditions,
+    reissueReward,
+    processReissue,
+    retryReissue,
+    batchReissueRewards,
+    getReissueRecords,
+    archiveActivity,
+    getArchive,
+    restoreFromArchive,
+    exportArchive,
     clearStorage,
   }
 })

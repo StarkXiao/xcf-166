@@ -1,4 +1,14 @@
-export type ActivityStatus = 'draft' | 'pending' | 'active' | 'paused' | 'ended' | 'cancelled'
+export type ActivityStatus = 'draft' | 'pending' | 'active' | 'paused' | 'ended' | 'cancelled' | 'archived'
+
+export type CountdownWarningLevel = 'safe' | 'warning' | 'urgent' | 'expired'
+
+export type StageUnlockType = 'time' | 'condition' | 'manual'
+
+export type ConditionValidationResult = 'pass' | 'fail' | 'error' | 'skipped'
+
+export type RewardReissueStatus = 'pending' | 'processing' | 'success' | 'failed'
+
+export type ArchiveStatus = 'none' | 'archiving' | 'archived' | 'failed'
 
 export type ActivityTemplateType = 'season' | 'signin' | 'task' | 'gacha' | 'limited_shop' | 'custom'
 
@@ -133,6 +143,8 @@ export interface ActivityConfig {
     tags?: string[]
     excludeTags?: string[]
   }
+  stages?: ActivityStage[]
+  countdownWarningThresholdMs?: number
 }
 
 export interface Activity {
@@ -146,6 +158,7 @@ export interface Activity {
   startedAt?: number
   endedAt?: number
   approvedAt?: number
+  archiveStatus?: ArchiveStatus
 }
 
 export interface ActivityDataPoint {
@@ -223,6 +236,78 @@ export interface AggregatedStatistics {
   dailyData: Array<{ date: string; exposures: number; clicks: number; claims: number }>
 }
 
+export interface CountdownInfo {
+  remainingMs: number
+  days: number
+  hours: number
+  minutes: number
+  seconds: number
+  warningLevel: CountdownWarningLevel
+  isExpired: boolean
+}
+
+export interface ActivityStage {
+  id: string
+  name: string
+  description: string
+  unlockType: StageUnlockType
+  unlockTime?: number
+  unlockConditions?: ConditionGroup
+  isUnlocked: boolean
+  unlockedAt?: number
+  order: number
+  rewardRules: string[]
+}
+
+export interface ConditionValidation {
+  conditionId: string
+  conditionType: TriggerConditionType
+  description: string
+  result: ConditionValidationResult
+  actualValue?: number | string
+  expectedValue?: number | string | [number, number]
+  operator?: string
+  message: string
+}
+
+export interface ConditionValidationReport {
+  activityId: string
+  playerId: string
+  validatedAt: number
+  overallResult: boolean
+  results: ConditionValidation[]
+}
+
+export interface RewardReissueRecord {
+  id: string
+  activityId: string
+  playerId: string
+  rewardId: string
+  rewardName: string
+  originalClaimAt: number
+  reissueAt: number
+  status: RewardReissueStatus
+  reason: string
+  retryCount: number
+  lastRetryAt?: number
+  metadata: Record<string, any>
+}
+
+export interface ActivityArchive {
+  id: string
+  activityId: string
+  activitySnapshot: Activity
+  statisticsSnapshot: ActivityStatistics | null
+  eventsSnapshot: ActivityEvent[]
+  logsSnapshot: ActivityLog[]
+  aggregatedSnapshot: AggregatedStatistics | null
+  archiveStatus: ArchiveStatus
+  archivedAt?: number
+  archivedBy: string
+  archiveSize: number
+  error?: string
+}
+
 export interface ActivityState {
   templates: ActivityTemplate[]
   activities: Activity[]
@@ -231,4 +316,7 @@ export interface ActivityState {
   logs: ActivityLog[]
   events: ActivityEvent[]
   loading: boolean
+  stages: Record<string, ActivityStage[]>
+  reissueRecords: RewardReissueRecord[]
+  archives: ActivityArchive[]
 }
