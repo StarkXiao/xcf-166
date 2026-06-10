@@ -97,6 +97,13 @@ export interface LimitPurchaseSnapshot {
   monthKey: string
 }
 
+export interface UsedItemSnapshot {
+  itemId: string
+  quantity: number
+  instantEffects: InstantEffectSnapshot[]
+  buffSnapshots: AppliedBuffSnapshot[]
+}
+
 export interface AssetChange {
   type: 'money' | 'reputation' | 'inventory' | 'buff' | 'instant_effect' | 'limit_count'
   target: string
@@ -105,6 +112,7 @@ export interface AssetChange {
   buffSnapshots?: AppliedBuffSnapshot[]
   instantEffectSnapshots?: InstantEffectSnapshot[]
   limitSnapshot?: LimitPurchaseSnapshot
+  usedSnapshots?: UsedItemSnapshot[]
 }
 
 export interface RollbackRecord {

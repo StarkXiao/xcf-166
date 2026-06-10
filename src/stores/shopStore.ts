@@ -18,7 +18,8 @@ import type {
   AssetChange,
   RollbackStatus,
   AppliedBuffSnapshot,
-  InstantEffectSnapshot
+  InstantEffectSnapshot,
+  UsedItemSnapshot
 } from '../types/shop'
 import { getInitialShopItems, getInitialDiscounts } from '../game/data/shopItems'
 import { getItemDef } from '../game/data/itemCatalog'
@@ -406,10 +407,40 @@ export const useShopStore = defineStore('shop', () => {
         } else if (change.type === 'reputation') {
           gameStore.addReputation(change.amount)
         } else if (change.type === 'inventory') {
-          if (change.itemId) {
+          if (change.usedSnapshots && change.usedSnapshots.length > 0) {
+            for (const used of change.usedSnapshots) {
+              for (const eff of used.instantEffects) {
+                if (eff.target === 'sanity') {
+                  gameStore.addSanity(-eff.value)
+                } else if (eff.target === 'money') {
+                  gameStore.addMoney(-eff.value)
+                } else if (eff.target === 'reputation') {
+                  gameStore.addReputation(-eff.value)
+                }
+              }
+              for (const bs of used.buffSnapshots) {
+                const existingBuff = characterStore.activeBuffs.find(b => b.id === bs.buffId)
+                if (existingBuff) {
+                  characterStore.removeBuff(bs.buffId)
+                } else {
+                  const sourceBuffs = characterStore.activeBuffs.filter(b => b.sourceSkillId === bs.sourceSkillId)
+                  for (const sb of sourceBuffs) {
+                    characterStore.removeBuff(sb.id)
+                  }
+                }
+              }
+            }
+          }
+
+          const totalUsedQty = (change.usedSnapshots || [])
+            .filter(u => u.itemId === change.itemId)
+            .reduce((s, u) => s + u.quantity, 0)
+          const remainingQty = Math.max(0, change.amount - totalUsedQty)
+
+          if (remainingQty > 0 && change.itemId) {
             const inv = inventory.value.find(i => i.itemId === change.itemId)
             if (inv) {
-              inv.quantity = Math.max(0, inv.quantity - change.amount)
+              inv.quantity = Math.max(0, inv.quantity - remainingQty)
               if (inv.quantity <= 0) {
                 inventory.value = inventory.value.filter(i => i.itemId !== change.itemId)
               }
@@ -922,6 +953,57 @@ export const useShopStore = defineStore('shop', () => {
     return getItemDef(itemId)
   }
 
+  function recordItemUsageToRollback(itemId: string, quantity: number, effectResult: UseItemResult): void {
+    const usedSnapshot: UsedItemSnapshot = {
+      itemId,
+      quantity,
+      instantEffects: [],
+      buffSnapshots: []
+    }
+
+    if (effectResult.success && effectResult.effect) {
+      const eff = effectResult.effect
+      if (eff.type === 'instant' && (eff.target === 'sanity' || eff.target === 'money' || eff.target === 'reputation')) {
+        usedSnapshot.instantEffects.push({
+          target: eff.target,
+          value: eff.value
+        })
+      }
+      if (eff.target === 'buff') {
+        const sourceSkillId = `shop_${itemId}`
+        const matchingBuffs = characterStore.activeBuffs.filter(b => b.sourceSkillId === sourceSkillId)
+        for (const b of matchingBuffs) {
+          usedSnapshot.buffSnapshots.push({ buffId: b.id, sourceSkillId: b.sourceSkillId })
+        }
+      }
+    }
+
+    const invChanges: AssetChange[] = []
+    for (const rb of rollbackRecords.value) {
+      if (rb.status !== 'pending') continue
+      for (const change of rb.changes) {
+        if (change.type === 'inventory' && change.itemId === itemId) {
+          invChanges.push(change)
+        }
+      }
+    }
+
+    if (invChanges.length > 0) {
+      const change = invChanges[0]
+      if (!change.usedSnapshots) {
+        change.usedSnapshots = []
+      }
+      const existingUsed = change.usedSnapshots.find(u => u.itemId === itemId)
+      if (existingUsed) {
+        existingUsed.quantity += quantity
+        existingUsed.instantEffects.push(...usedSnapshot.instantEffects)
+        existingUsed.buffSnapshots.push(...usedSnapshot.buffSnapshots)
+      } else {
+        change.usedSnapshots.push({ ...usedSnapshot })
+      }
+    }
+  }
+
   function useItem(itemId: string, quantity: number = 1): UseItemResult {
     const invItem = inventory.value.find(inv => inv.itemId === itemId)
     if (!invItem || invItem.quantity < quantity) {
@@ -956,10 +1038,13 @@ export const useShopStore = defineStore('shop', () => {
 
     const result = applyItemEffect(shopItem, quantity)
     if (result.success) {
+      recordItemUsageToRollback(itemId, quantity, result)
+
       invItem.quantity -= quantity
       if (invItem.quantity <= 0) {
         inventory.value = inventory.value.filter(inv => inv.itemId !== itemId)
       }
+      invItem.usedAt = Date.now()
 
       achievementStore.trackBehavior('item_used', {
         itemId,
