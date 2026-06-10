@@ -8,12 +8,15 @@ import { useGameStore } from '@/stores/gameStore'
 import { useFriendStore } from '@/stores/friendStore'
 import { useMailStore } from '@/stores/mailStore'
 import { useOfflineStore } from '@/stores/offlineStore'
+import { useRedDot } from '@/composables/useRedDot'
 import AchievementUnlockPopup from '@/components/achievement/AchievementUnlockPopup.vue'
 import NotificationCenter from '@/components/achievement/NotificationCenter.vue'
 import FriendNotificationCenter from '@/components/friend/FriendNotificationCenter.vue'
 import FriendEntryCard from '@/components/friend/FriendEntryCard.vue'
 import TutorialGuide from '@/components/tutorial/TutorialGuide.vue'
-import { Bell, Trophy, Store, HelpCircle, Heart, Users, Mail, BarChart3 } from 'lucide-vue-next'
+import RedDotBadge from '@/components/common/RedDotBadge.vue'
+import RedDotCenter from '@/components/common/RedDotCenter.vue'
+import { Bell, Trophy, Store, HelpCircle, Heart, Users, Mail, BarChart3, Dot } from 'lucide-vue-next'
 import { useRouter, useRoute } from 'vue-router'
 
 const achievementStore = useAchievementStore()
@@ -27,11 +30,58 @@ const offlineStore = useOfflineStore()
 const router = useRouter()
 const route = useRoute()
 
+const {
+  redDotStore,
+  totalBadgeCount,
+  highestPriority,
+  getCategoryBadgeCount,
+  getMultiCategoryBadgeCount,
+  getMultiCategoryHighestPriority,
+} = useRedDot()
+
 const showNotificationCenter = ref(false)
 const showFriendNotificationCenter = ref(false)
+const showRedDotCenter = ref(false)
 const showNav = computed(() => route.name === 'game')
 const showFriendEntry = computed(() => route.name === 'game')
 const tutorialGuideRef = ref<InstanceType<typeof TutorialGuide> | null>(null)
+
+const achievementBadgeCount = computed(() =>
+  getMultiCategoryBadgeCount(['achievement_reward', 'achievement_notification'])
+)
+const achievementBadgePriority = computed(() =>
+  getMultiCategoryHighestPriority(['achievement_reward', 'achievement_notification'])
+)
+
+const friendBadgeCount = computed(() =>
+  getMultiCategoryBadgeCount([
+    'friend_invite',
+    'friend_notification',
+    'friend_help_request',
+    'friend_task_reward',
+  ])
+)
+const friendBadgePriority = computed(() =>
+  getMultiCategoryHighestPriority([
+    'friend_invite',
+    'friend_notification',
+    'friend_help_request',
+    'friend_task_reward',
+  ])
+)
+
+const mailBadgeCount = computed(() =>
+  getMultiCategoryBadgeCount(['mail_unread', 'mail_attachment'])
+)
+const mailBadgePriority = computed(() =>
+  getMultiCategoryHighestPriority(['mail_unread', 'mail_attachment'])
+)
+
+const mailAttachmentBadgeCount = computed(() => getCategoryBadgeCount('mail_attachment'))
+
+const seasonBadgeCount = computed(() => getCategoryBadgeCount('season_task'))
+
+const shopBadgeCount = computed(() => getCategoryBadgeCount('shop_new'))
 
 onMounted(() => {
   seasonStore.initSeason()
@@ -40,6 +90,7 @@ onMounted(() => {
   tutorialStore.initTutorial(characterStore.activeCharacter?.id || 'player_local')
   friendStore.initFriendSystem(characterStore.activeCharacter?.id || 'player_local')
   mailStore.initMailSystem(characterStore.activeCharacter?.id || 'player_local')
+  redDotStore.initRedDotSystem(characterStore.activeCharacter?.id || 'player_local')
 
   if (!tutorialStore.isCompleted && tutorialStore.analytics.firstLogin) {
     setTimeout(() => {
@@ -108,6 +159,10 @@ function goToDashboard() {
 function toggleFriendNotificationCenter() {
   showFriendNotificationCenter.value = !showFriendNotificationCenter.value
 }
+
+function toggleRedDotCenter() {
+  showRedDotCenter.value = !showRedDotCenter.value
+}
 </script>
 
 <template>
@@ -123,6 +178,12 @@ function toggleFriendNotificationCenter() {
         title="道具商城"
       >
         <Store class="w-5 h-5 text-amber-400 group-hover:text-amber-300" />
+        <RedDotBadge
+          v-if="shopBadgeCount > 0"
+          :count="shopBadgeCount"
+          priority="low"
+          class="absolute -top-1 -right-1"
+        />
       </button>
 
       <button
@@ -141,12 +202,12 @@ function toggleFriendNotificationCenter() {
         title="成就中心"
       >
         <Trophy class="w-5 h-5 text-amber-400 group-hover:text-amber-300" />
-        <span
-          v-if="achievementStore.unclaimedCount > 0"
-          class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold animate-pulse"
-        >
-          {{ achievementStore.unclaimedCount }}
-        </span>
+        <RedDotBadge
+          v-if="achievementBadgeCount > 0"
+          :count="achievementBadgeCount"
+          :priority="achievementBadgePriority || 'important'"
+          class="absolute -top-1 -right-1"
+        />
       </button>
 
       <button
@@ -156,12 +217,12 @@ function toggleFriendNotificationCenter() {
         title="好友协作"
       >
         <Heart class="w-5 h-5 text-pink-400 group-hover:text-pink-300" />
-        <span
-          v-if="friendStore.totalUnreadCount > 0"
-          class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold animate-pulse"
-        >
-          {{ friendStore.totalUnreadCount }}
-        </span>
+        <RedDotBadge
+          v-if="friendBadgeCount > 0"
+          :count="friendBadgeCount"
+          :priority="friendBadgePriority || 'important'"
+          class="absolute -top-1 -right-1"
+        />
       </button>
 
       <button
@@ -171,18 +232,20 @@ function toggleFriendNotificationCenter() {
         title="邮件中心"
       >
         <Mail class="w-5 h-5 text-blue-400 group-hover:text-blue-300" />
-        <span
-          v-if="mailStore.unreadCount > 0"
-          class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold animate-pulse"
-        >
-          {{ mailStore.unreadCount }}
-        </span>
-        <span
-          v-if="mailStore.unclaimedAttachmentCount > 0"
-          class="absolute -bottom-1 -left-1 w-4 h-4 bg-amber-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold"
-        >
-          {{ mailStore.unclaimedAttachmentCount }}
-        </span>
+        <RedDotBadge
+          v-if="mailBadgeCount > 0"
+          :count="mailBadgeCount"
+          :priority="mailBadgePriority || 'normal'"
+          class="absolute -top-1 -right-1"
+        />
+        <RedDotBadge
+          v-if="mailAttachmentBadgeCount > 0"
+          :count="mailAttachmentBadgeCount"
+          priority="important"
+          color="bg-amber-500"
+          size="sm"
+          class="absolute -bottom-1 -left-1"
+        />
       </button>
 
       <button
@@ -191,12 +254,12 @@ function toggleFriendNotificationCenter() {
         title="好友消息"
       >
         <Users class="w-5 h-5 text-gray-400 hover:text-white" />
-        <span
+        <RedDotBadge
           v-if="friendStore.unreadNotificationCount > 0"
-          class="absolute -top-1 -right-1 w-5 h-5 bg-pink-500 text-white text-xs rounded-full flex items-center justify-center font-bold"
-        >
-          {{ friendStore.unreadNotificationCount }}
-        </span>
+          :count="friendStore.unreadNotificationCount"
+          color="bg-pink-500"
+          class="absolute -top-1 -right-1"
+        />
       </button>
 
       <button
@@ -205,12 +268,26 @@ function toggleFriendNotificationCenter() {
         title="消息中心"
       >
         <Bell class="w-5 h-5 text-gray-400 hover:text-white" />
-        <span
+        <RedDotBadge
           v-if="achievementStore.unreadNotificationCount > 0"
-          class="absolute -top-1 -right-1 w-5 h-5 bg-blue-500 text-white text-xs rounded-full flex items-center justify-center font-bold"
-        >
-          {{ achievementStore.unreadNotificationCount }}
-        </span>
+          :count="achievementStore.unreadNotificationCount"
+          color="bg-blue-500"
+          class="absolute -top-1 -right-1"
+        />
+      </button>
+
+      <button
+        @click="toggleRedDotCenter"
+        class="relative p-3 bg-gray-900/90 backdrop-blur-sm rounded-xl border border-gray-700 hover:bg-gray-800 transition-colors"
+        title="红点提醒中心"
+      >
+        <Dot class="w-5 h-5 text-gray-400 hover:text-white" />
+        <RedDotBadge
+          v-if="totalBadgeCount > 0"
+          :count="totalBadgeCount"
+          :priority="highestPriority || 'normal'"
+          class="absolute -top-1 -right-1"
+        />
       </button>
     </div>
 
@@ -233,6 +310,11 @@ function toggleFriendNotificationCenter() {
     <FriendNotificationCenter
       :show="showFriendNotificationCenter"
       @close="showFriendNotificationCenter = false"
+    />
+
+    <RedDotCenter
+      :show="showRedDotCenter"
+      @close="showRedDotCenter = false"
     />
 
     <TutorialGuide ref="tutorialGuideRef" />
