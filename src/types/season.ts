@@ -1,4 +1,6 @@
 export type SeasonStatus = 'upcoming' | 'active' | 'ended' | 'settled'
+export type LeaderboardType = 'global' | 'region' | 'friend'
+export type LeaderboardRefreshStatus = 'idle' | 'loading' | 'success' | 'error'
 
 export interface Season {
   id: string
@@ -12,6 +14,13 @@ export interface Season {
   maxLevel: number
   baseExpPerLevel: number
   expMultiplier: number
+}
+
+export interface Region {
+  id: string
+  name: string
+  code: string
+  serverName: string
 }
 
 export type TaskType = 'daily' | 'weekly' | 'challenge'
@@ -120,9 +129,41 @@ export interface LeaderboardEntry {
   playerName: string
   playerAvatar: string
   rank: number
+  displayRank: number
+  isTied: boolean
+  tieCount?: number
   score: number
   previousRank?: number
+  regionId?: string
+  regionName?: string
+  isFriend?: boolean
   updatedAt: number
+}
+
+export interface LeaderboardCache {
+  global: { data: LeaderboardEntry[]; timestamp: number } | null
+  region: { data: LeaderboardEntry[]; timestamp: number } | null
+  friend: { data: LeaderboardEntry[]; timestamp: number } | null
+}
+
+export interface LeaderboardRefreshState {
+  status: LeaderboardRefreshStatus
+  lastRefreshTime: number
+  cooldownRemaining: number
+  errorMessage?: string
+}
+
+export interface LeaderboardShareData {
+  type: LeaderboardType
+  playerId: string
+  playerName: string
+  playerAvatar: string
+  rank: number
+  score: number
+  seasonId: string
+  seasonName: string
+  regionName?: string
+  timestamp: number
 }
 
 export interface ExpRecord {
@@ -158,4 +199,6 @@ export interface SeasonSaveData {
   expRecords: ExpRecord[]
   settlements: SeasonSettlement[]
   frozenLeaderboard: LeaderboardEntry[] | null
+  leaderboardCache: LeaderboardCache
+  playerRegionId: string | null
 }

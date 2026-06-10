@@ -1,4 +1,4 @@
-import type { SeasonReward, RankRewardTier } from '@/types/season'
+import type { SeasonReward, RankRewardTier, LeaderboardEntry, Region } from '@/types/season'
 
 export const rankRewardTiers: RankRewardTier[] = [
   { minRank: 1, maxRank: 1, rewardId: 'reward_rank_1', tierName: '至尊王者' },
@@ -309,115 +309,138 @@ export function getRewardsByLevel(
   return seasonRewards.filter((r) => r.seasonId === seasonId && r.level <= level)
 }
 
-export const mockLeaderboard = [
-  {
-    id: '1',
-    playerId: 'player_001',
-    seasonId: 'season_001',
-    playerName: '幽冥渡者',
-    playerAvatar: '👻',
-    rank: 1,
-    score: 15680,
-    previousRank: 1,
-    updatedAt: Date.now(),
-  },
-  {
-    id: '2',
-    playerId: 'player_002',
-    seasonId: 'season_001',
-    playerName: '暗夜猎手',
-    playerAvatar: '🦇',
-    rank: 2,
-    score: 14230,
-    previousRank: 3,
-    updatedAt: Date.now(),
-  },
-  {
-    id: '3',
-    playerId: 'player_003',
-    seasonId: 'season_001',
-    playerName: '灵魂收割者',
-    playerAvatar: '💀',
-    rank: 3,
-    score: 13890,
-    previousRank: 2,
-    updatedAt: Date.now(),
-  },
-  {
-    id: '4',
-    playerId: 'player_004',
-    seasonId: 'season_001',
-    playerName: '月下独行者',
-    playerAvatar: '🌙',
-    rank: 4,
-    score: 12450,
-    previousRank: 5,
-    updatedAt: Date.now(),
-  },
-  {
-    id: '5',
-    playerId: 'player_005',
-    seasonId: 'season_001',
-    playerName: '彼岸花盛开',
-    playerAvatar: '🌸',
-    rank: 5,
-    score: 11200,
-    previousRank: 4,
-    updatedAt: Date.now(),
-  },
-  {
-    id: '6',
-    playerId: 'player_006',
-    seasonId: 'season_001',
-    playerName: '黄泉引路人',
-    playerAvatar: '🔥',
-    rank: 6,
-    score: 10890,
-    previousRank: 8,
-    updatedAt: Date.now(),
-  },
-  {
-    id: '7',
-    playerId: 'player_007',
-    seasonId: 'season_001',
-    playerName: '忘川摆渡人',
-    playerAvatar: '⛵',
-    rank: 7,
-    score: 9870,
-    previousRank: 6,
-    updatedAt: Date.now(),
-  },
-  {
-    id: '8',
-    playerId: 'player_008',
-    seasonId: 'season_001',
-    playerName: '三生石畔客',
-    playerAvatar: '🪨',
-    rank: 8,
-    score: 8760,
-    previousRank: 10,
-    updatedAt: Date.now(),
-  },
-  {
-    id: '9',
-    playerId: 'player_009',
-    seasonId: 'season_001',
-    playerName: '奈何桥上叹',
-    playerAvatar: '🌉',
-    rank: 9,
-    score: 7650,
-    previousRank: 7,
-    updatedAt: Date.now(),
-  },
-  {
-    id: '10',
-    playerId: 'player_010',
-    seasonId: 'season_001',
-    playerName: '孟婆汤一碗',
-    playerAvatar: '🍵',
-    rank: 10,
-    score: 6540,
-    previousRank: 9,
-    updatedAt: Date.now(),
-  },
+export const regions: Region[] = [
+  { id: 'region_001', name: '华东区', code: 'east', serverName: '幽冥地府' },
+  { id: 'region_002', name: '华北区', code: 'north', serverName: '黄泉路' },
+  { id: 'region_003', name: '华南区', code: 'south', serverName: '奈何桥' },
+  { id: 'region_004', name: '西南区', code: 'southwest', serverName: '三生石' },
+  { id: 'region_005', name: '华中区', code: 'central', serverName: '望乡台' },
 ]
+
+function createMockEntry(
+  id: string,
+  playerId: string,
+  playerName: string,
+  playerAvatar: string,
+  score: number,
+  previousRank: number,
+  regionId?: string,
+  regionName?: string,
+  isFriend: boolean = false
+): LeaderboardEntry {
+  return {
+    id,
+    playerId,
+    seasonId: 'season_001',
+    playerName,
+    playerAvatar,
+    rank: 0,
+    displayRank: 0,
+    isTied: false,
+    score,
+    previousRank,
+    regionId,
+    regionName,
+    isFriend,
+    updatedAt: Date.now(),
+  }
+}
+
+export const mockLeaderboard = [
+  createMockEntry('1', 'player_001', '幽冥渡者', '👻', 15680, 1, 'region_001', '华东区'),
+  createMockEntry('2', 'player_002', '暗夜猎手', '🦇', 14230, 3, 'region_001', '华东区'),
+  createMockEntry('3', 'player_003', '灵魂收割者', '💀', 13890, 2, 'region_002', '华北区'),
+  createMockEntry('4', 'player_004', '月下独行者', '🌙', 12450, 5, 'region_001', '华东区'),
+  createMockEntry('5', 'player_005', '彼岸花盛开', '🌸', 11200, 4, 'region_003', '华南区'),
+  createMockEntry('6', 'player_006', '黄泉引路人', '🔥', 10890, 8, 'region_002', '华北区'),
+  createMockEntry('7', 'player_007', '忘川摆渡人', '⛵', 9870, 6, 'region_004', '西南区'),
+  createMockEntry('8', 'player_008', '三生石畔客', '🪨', 8760, 10, 'region_001', '华东区'),
+  createMockEntry('9', 'player_009', '奈何桥上叹', '🌉', 7650, 7, 'region_005', '华中区'),
+  createMockEntry('10', 'player_010', '孟婆汤一碗', '🍵', 6540, 9, 'region_003', '华南区'),
+  createMockEntry('11', 'player_011', '黑白无常', '⚫', 15680, 11, 'region_001', '华东区'),
+  createMockEntry('12', 'player_012', '牛头马面', '🐂', 5800, 12, 'region_002', '华北区'),
+  createMockEntry('13', 'player_013', '判官笔', '🖊️', 5200, 13, 'region_001', '华东区'),
+  createMockEntry('14', 'player_014', '阎王令', '👑', 4800, 15, 'region_004', '西南区'),
+  createMockEntry('15', 'player_015', '轮回镜', '🔮', 4500, 14, 'region_005', '华中区'),
+]
+
+export const mockFriendLeaderboard = [
+  createMockEntry('f1', 'player_001', '幽冥渡者', '👻', 15680, 1, 'region_001', '华东区', true),
+  createMockEntry('f4', 'player_004', '月下独行者', '🌙', 12450, 2, 'region_001', '华东区', true),
+  createMockEntry('f6', 'player_006', '黄泉引路人', '🔥', 10890, 4, 'region_002', '华北区', true),
+  createMockEntry('f8', 'player_008', '三生石畔客', '🪨', 8760, 3, 'region_001', '华东区', true),
+  createMockEntry('f12', 'player_012', '牛头马面', '🐂', 5800, 5, 'region_002', '华北区', true),
+]
+
+export const mockRegionLeaderboards: Record<string, LeaderboardEntry[]> = {
+  region_001: [
+    mockLeaderboard[0],
+    mockLeaderboard[1],
+    mockLeaderboard[3],
+    mockLeaderboard[7],
+    mockLeaderboard[10],
+    mockLeaderboard[12],
+  ],
+  region_002: [
+    mockLeaderboard[2],
+    mockLeaderboard[5],
+    mockLeaderboard[11],
+    mockLeaderboard[13],
+  ],
+  region_003: [
+    mockLeaderboard[4],
+    mockLeaderboard[9],
+  ],
+  region_004: [
+    mockLeaderboard[6],
+    mockLeaderboard[13],
+  ],
+  region_005: [
+    mockLeaderboard[8],
+    mockLeaderboard[14],
+  ],
+}
+
+export function calculateTiedRanks(entries: LeaderboardEntry[]): LeaderboardEntry[] {
+  const sorted = [...entries].sort((a, b) => b.score - a.score)
+  const result: LeaderboardEntry[] = []
+  let actualRank = 1
+
+  for (let i = 0; i < sorted.length; i++) {
+    const current = { ...sorted[i] }
+    if (i > 0 && sorted[i].score === sorted[i - 1].score) {
+      current.isTied = true
+      current.displayRank = result[i - 1].displayRank
+    } else {
+      current.isTied = false
+      current.displayRank = actualRank
+    }
+    current.rank = actualRank
+    result.push(current)
+    actualRank++
+  }
+
+  result.forEach((entry) => {
+    if (entry.isTied) {
+      entry.tieCount = result.filter((e) => e.displayRank === entry.displayRank).length
+    }
+  })
+
+  return result
+}
+
+export function getRegionLeaderboard(regionId: string): LeaderboardEntry[] {
+  return mockRegionLeaderboards[regionId] || []
+}
+
+export function getFriendLeaderboard(): LeaderboardEntry[] {
+  return [...mockFriendLeaderboard]
+}
+
+export function getRandomRegion(): Region {
+  return regions[Math.floor(Math.random() * regions.length)]
+}
+
+export function getRegionById(id: string): Region | undefined {
+  return regions.find((r) => r.id === id)
+}

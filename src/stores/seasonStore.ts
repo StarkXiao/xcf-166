@@ -12,6 +12,11 @@ import type {
   Countdown,
   TaskConditionType,
   SeasonSettlement,
+  LeaderboardType,
+  LeaderboardCache,
+  LeaderboardRefreshState,
+  LeaderboardShareData,
+  Region,
 } from '@/types/season'
 import { getCurrentSeason } from '@/game/data/seasons'
 import { getTasksBySeasonId, getTasksByType } from '@/game/data/seasonTasks'
@@ -20,13 +25,24 @@ import {
   getRewardById,
   mockLeaderboard,
   rankRewardTiers,
+  regions,
+  getFriendLeaderboard,
+  getRegionLeaderboard,
+  calculateTiedRanks,
+  getRandomRegion,
+  getRegionById,
 } from '@/game/data/seasonRewards'
 import { useActivityStore } from '@/stores/activityStore'
 import { useTaskStore } from '@/stores/taskStore'
+import { useFriendStore } from '@/stores/friendStore'
 
 const SEASON_ACTIVITY_ID = 'act_001'
 
 const STORAGE_KEY = 'season_center_data'
+
+const LEADERBOARD_CACHE_TTL = 60 * 1000
+const LEADERBOARD_REFRESH_COOLDOWN = 5 * 1000
+const LEADERBOARD_AUTO_REFRESH_INTERVAL = 30 * 1000
 
 function generateId(): string {
   return 'id_' + Math.random().toString(36).substr(2, 9)
@@ -60,11 +76,29 @@ export const useSeasonStore = defineStore('season', () => {
   const rewards = ref<SeasonReward[]>([])
   const rewardRecords = ref<RewardRecord[]>([])
   const leaderboard = ref<LeaderboardEntry[]>([])
+  const regionLeaderboard = ref<LeaderboardEntry[]>([])
+  const friendLeaderboard = ref<LeaderboardEntry[]>([])
   const expRecords = ref<ExpRecord[]>([])
   const settlements = ref<SeasonSettlement[]>([])
   const frozenLeaderboard = ref<LeaderboardEntry[] | null>(null)
+  const frozenRegionLeaderboard = ref<LeaderboardEntry[] | null>(null)
+  const frozenFriendLeaderboard = ref<LeaderboardEntry[] | null>(null)
+  const playerRegionId = ref<string | null>(null)
+  const activeLeaderboardType = ref<LeaderboardType>('global')
+  const leaderboardCache = ref<LeaderboardCache>({
+    global: null,
+    region: null,
+    friend: null,
+  })
+  const leaderboardRefreshState = ref<Record<LeaderboardType, LeaderboardRefreshState>>({
+    global: { status: 'idle', lastRefreshTime: 0, cooldownRemaining: 0 },
+    region: { status: 'idle', lastRefreshTime: 0, cooldownRemaining: 0 },
+    friend: { status: 'idle', lastRefreshTime: 0, cooldownRemaining: 0 },
+  })
   let autoCheckTimer: number | null = null
   let autoCheckRunning = false
+  let leaderboardAutoRefreshTimer: number | null = null
+  let refreshCooldownTimer: number | null = null
 
   const isSeasonActive = computed(() => {
     if (!currentSeason.value) return false
@@ -97,6 +131,64 @@ export const useSeasonStore = defineStore('season', () => {
       return frozenLeaderboard.value
     }
     return leaderboard.value
+  })
+
+  const displayRegionLeaderboard = computed(() => {
+    if (frozenRegionLeaderboard.value) {
+      return frozenRegionLeaderboard.value
+    }
+    return regionLeaderboard.value
+  })
+
+  const displayFriendLeaderboard = computed(() => {
+    if (frozenFriendLeaderboard.value) {
+      return frozenFriendLeaderboard.value
+    }
+    return friendLeaderboard.value
+  })
+
+  const currentLeaderboard = computed(() => {
+    switch (activeLeaderboardType.value) {
+      case 'region':
+        return displayRegionLeaderboard.value
+      case 'friend':
+        return displayFriendLeaderboard.value
+      case 'global':
+      default:
+        return displayLeaderboard.value
+    }
+  })
+
+  const playerRegion = computed<Region | null>(() => {
+    if (!playerRegionId.value) return null
+    return getRegionById(playerRegionId.value) || null
+  })
+
+  const allRegions = computed(() => regions)
+
+  const canRefreshLeaderboard = computed(() => {
+    const state = leaderboardRefreshState.value[activeLeaderboardType.value]
+    return state.cooldownRemaining <= 0 && state.status !== 'loading'
+  })
+
+  const currentRefreshState = computed(() => {
+    return leaderboardRefreshState.value[activeLeaderboardType.value]
+  })
+
+  const playerRegionRank = computed(() => {
+    if (!playerSeason.value) return -1
+    const entry = displayRegionLeaderboard.value.find(
+      (e) => e.playerId === playerSeason.value!.playerId
+    )
+    return entry ? entry.displayRank : -1
+  })
+
+  const playerFriendRank = computed(() => {
+    if (!playerSeason.value) return -1
+    const entry = displayFriendLeaderboard.value.find(
+      (e) => e.playerId === playerSeason.value!.playerId
+    )
+    return entry ? entry.displayRank : -1
   })
 
   const currentSettlement = computed(() => {
@@ -182,7 +274,7 @@ export const useSeasonStore = defineStore('season', () => {
     const entry = displayLeaderboard.value.find(
       (e) => e.playerId === playerSeason.value!.playerId
     )
-    return entry ? entry.rank : -1
+    return entry ? entry.displayRank : -1
   })
 
   const unclaimedCount = computed(() => {
@@ -246,6 +338,7 @@ export const useSeasonStore = defineStore('season', () => {
     stopAutoCheck()
 
     checkAndSettleIfEnded()
+    startLeaderboardAutoRefresh()
 
     autoCheckTimer = window.setInterval(() => {
       checkAndSettleIfEnded()
@@ -257,14 +350,16 @@ export const useSeasonStore = defineStore('season', () => {
       clearInterval(autoCheckTimer)
       autoCheckTimer = null
     }
+    stopLeaderboardAutoRefresh()
   }
 
   function initSeason(playerId: string = 'player_local') {
     loadCurrentSeason()
     loadPlayerSeason(playerId)
+    ensurePlayerRegion()
     loadTasks()
     loadRewards()
-    loadLeaderboard()
+    loadAllLeaderboards()
     checkAndResetTasks()
     checkAndSettleIfEnded()
   }
@@ -361,6 +456,47 @@ export const useSeasonStore = defineStore('season', () => {
     if (savedData && savedData.frozenLeaderboard) {
       frozenLeaderboard.value = savedData.frozenLeaderboard
     }
+    if (savedData && savedData.leaderboardCache) {
+      leaderboardCache.value = savedData.leaderboardCache
+    }
+    if (savedData && savedData.playerRegionId) {
+      playerRegionId.value = savedData.playerRegionId
+    }
+  }
+
+  function ensurePlayerRegion() {
+    if (!playerRegionId.value) {
+      const savedData = loadFromStorage()
+      if (savedData && savedData.playerRegionId) {
+        playerRegionId.value = savedData.playerRegionId
+      } else {
+        const region = getRandomRegion()
+        playerRegionId.value = region.id
+        saveToStorage()
+      }
+    }
+  }
+
+  function createPlayerEntry(regionId?: string, regionName?: string, isFriend: boolean = false): LeaderboardEntry {
+    if (!playerSeason.value) {
+      throw new Error('Player season not loaded')
+    }
+    return {
+      id: generateId(),
+      playerId: playerSeason.value.playerId,
+      seasonId: currentSeason.value?.id || '',
+      playerName: '你',
+      playerAvatar: '🎭',
+      rank: 0,
+      displayRank: 0,
+      isTied: false,
+      score: calculateRankScore(),
+      previousRank: 12,
+      regionId,
+      regionName,
+      isFriend,
+      updatedAt: Date.now(),
+    }
   }
 
   function loadLeaderboard() {
@@ -369,27 +505,189 @@ export const useSeasonStore = defineStore('season', () => {
       return
     }
 
-    leaderboard.value = [...mockLeaderboard]
+    let entries = [...mockLeaderboard]
 
     if (playerSeason.value) {
-      const playerEntry: LeaderboardEntry = {
-        id: generateId(),
-        playerId: playerSeason.value.playerId,
-        seasonId: currentSeason.value?.id || '',
-        playerName: '你',
-        playerAvatar: '🎭',
-        rank: 8,
-        score: calculateRankScore(),
-        previousRank: 12,
-        updatedAt: Date.now(),
-      }
-      leaderboard.value.push(playerEntry)
-      leaderboard.value.sort((a, b) => b.score - a.score)
-      leaderboard.value.forEach((entry, index) => {
-        entry.previousRank = entry.rank
-        entry.rank = index + 1
-      })
+      const region = getRegionById(playerRegionId.value || '')
+      const playerEntry = createPlayerEntry(region?.id, region?.name, false)
+      entries.push(playerEntry)
     }
+
+    leaderboard.value = calculateTiedRanks(entries)
+  }
+
+  function loadRegionLeaderboard() {
+    if (frozenRegionLeaderboard.value) {
+      regionLeaderboard.value = frozenRegionLeaderboard.value
+      return
+    }
+
+    if (!playerRegionId.value) {
+      regionLeaderboard.value = []
+      return
+    }
+
+    let entries = getRegionLeaderboard(playerRegionId.value)
+
+    if (playerSeason.value) {
+      const region = getRegionById(playerRegionId.value)
+      const playerEntry = createPlayerEntry(region?.id, region?.name, false)
+      entries = [...entries, playerEntry]
+    }
+
+    regionLeaderboard.value = calculateTiedRanks(entries)
+  }
+
+  function loadFriendLeaderboard() {
+    if (frozenFriendLeaderboard.value) {
+      friendLeaderboard.value = frozenFriendLeaderboard.value
+      return
+    }
+
+    let entries = getFriendLeaderboard()
+
+    if (playerSeason.value) {
+      const region = getRegionById(playerRegionId.value || '')
+      const playerEntry = createPlayerEntry(region?.id, region?.name, true)
+      entries = [...entries, playerEntry]
+    }
+
+    friendLeaderboard.value = calculateTiedRanks(entries)
+  }
+
+  function loadAllLeaderboards() {
+    ensurePlayerRegion()
+    loadLeaderboard()
+    loadRegionLeaderboard()
+    loadFriendLeaderboard()
+  }
+
+  function isLeaderboardCacheValid(type: LeaderboardType): boolean {
+    const cache = leaderboardCache.value[type]
+    if (!cache) return false
+    return Date.now() - cache.timestamp < LEADERBOARD_CACHE_TTL
+  }
+
+  async function refreshLeaderboard(type: LeaderboardType, force: boolean = false): Promise<boolean> {
+    const state = leaderboardRefreshState.value[type]
+
+    if (!force && state.status === 'loading') {
+      return false
+    }
+
+    if (!force && state.cooldownRemaining > 0) {
+      return false
+    }
+
+    if (!force && isLeaderboardCacheValid(type)) {
+      const cache = leaderboardCache.value[type]!
+      switch (type) {
+        case 'global':
+          leaderboard.value = [...cache.data]
+          break
+        case 'region':
+          regionLeaderboard.value = [...cache.data]
+          break
+        case 'friend':
+          friendLeaderboard.value = [...cache.data]
+          break
+      }
+      state.status = 'success'
+      state.lastRefreshTime = Date.now()
+      return true
+    }
+
+    state.status = 'loading'
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 500 + Math.random() * 500))
+
+      switch (type) {
+        case 'global':
+          loadLeaderboard()
+          leaderboardCache.value.global = {
+            data: [...leaderboard.value],
+            timestamp: Date.now(),
+          }
+          break
+        case 'region':
+          loadRegionLeaderboard()
+          leaderboardCache.value.region = {
+            data: [...regionLeaderboard.value],
+            timestamp: Date.now(),
+          }
+          break
+        case 'friend':
+          loadFriendLeaderboard()
+          leaderboardCache.value.friend = {
+            data: [...friendLeaderboard.value],
+            timestamp: Date.now(),
+          }
+          break
+      }
+
+      state.status = 'success'
+      state.lastRefreshTime = Date.now()
+      state.errorMessage = undefined
+
+      startRefreshCooldown(type)
+
+      saveToStorage()
+      return true
+    } catch (error) {
+      state.status = 'error'
+      state.errorMessage = error instanceof Error ? error.message : '刷新失败'
+      return false
+    }
+  }
+
+  function startRefreshCooldown(type: LeaderboardType) {
+    const state = leaderboardRefreshState.value[type]
+    state.cooldownRemaining = LEADERBOARD_REFRESH_COOLDOWN
+
+    if (refreshCooldownTimer) {
+      clearInterval(refreshCooldownTimer)
+    }
+
+    refreshCooldownTimer = window.setInterval(() => {
+      let anyActive = false
+      ;(['global', 'region', 'friend'] as LeaderboardType[]).forEach((t) => {
+        const s = leaderboardRefreshState.value[t]
+        if (s.cooldownRemaining > 0) {
+          s.cooldownRemaining = Math.max(0, s.cooldownRemaining - 1000)
+          if (s.cooldownRemaining > 0) anyActive = true
+        }
+      })
+      if (!anyActive && refreshCooldownTimer) {
+        clearInterval(refreshCooldownTimer)
+        refreshCooldownTimer = null
+      }
+    }, 1000)
+  }
+
+  function startLeaderboardAutoRefresh() {
+    stopLeaderboardAutoRefresh()
+
+    leaderboardAutoRefreshTimer = window.setInterval(() => {
+      if (isSeasonActive.value && !isLeaderboardFrozen.value) {
+        ;(['global', 'region', 'friend'] as LeaderboardType[]).forEach((type) => {
+          if (!isLeaderboardCacheValid(type)) {
+            refreshLeaderboard(type, false)
+          }
+        })
+      }
+    }, LEADERBOARD_AUTO_REFRESH_INTERVAL)
+  }
+
+  function stopLeaderboardAutoRefresh() {
+    if (leaderboardAutoRefreshTimer !== null) {
+      clearInterval(leaderboardAutoRefreshTimer)
+      leaderboardAutoRefreshTimer = null
+    }
+  }
+
+  function setActiveLeaderboardType(type: LeaderboardType) {
+    activeLeaderboardType.value = type
   }
 
   function freezeLeaderboard() {
@@ -399,8 +697,53 @@ export const useSeasonStore = defineStore('season', () => {
       ...entry,
       updatedAt: Date.now(),
     }))
+    frozenRegionLeaderboard.value = [...displayRegionLeaderboard.value].map((entry) => ({
+      ...entry,
+      updatedAt: Date.now(),
+    }))
+    frozenFriendLeaderboard.value = [...displayFriendLeaderboard.value].map((entry) => ({
+      ...entry,
+      updatedAt: Date.now(),
+    }))
     saveToStorage()
     return true
+  }
+
+  function generateShareData(type: LeaderboardType): LeaderboardShareData | null {
+    if (!playerSeason.value || !currentSeason.value) return null
+
+    const boards: Record<LeaderboardType, LeaderboardEntry[]> = {
+      global: displayLeaderboard.value,
+      region: displayRegionLeaderboard.value,
+      friend: displayFriendLeaderboard.value,
+    }
+
+    const playerEntry = boards[type].find((e) => e.playerId === playerSeason.value!.playerId)
+    if (!playerEntry) return null
+
+    return {
+      type,
+      playerId: playerSeason.value.playerId,
+      playerName: playerEntry.playerName,
+      playerAvatar: playerEntry.playerAvatar,
+      rank: playerEntry.displayRank,
+      score: playerEntry.score,
+      seasonId: currentSeason.value.id,
+      seasonName: currentSeason.value.name,
+      regionName: playerRegion.value?.name,
+      timestamp: Date.now(),
+    }
+  }
+
+  function getRankForSettlement(type: LeaderboardType): number {
+    if (!playerSeason.value) return 999
+    const boards: Record<LeaderboardType, LeaderboardEntry[]> = {
+      global: displayLeaderboard.value,
+      region: displayRegionLeaderboard.value,
+      friend: displayFriendLeaderboard.value,
+    }
+    const entry = boards[type].find((e) => e.playerId === playerSeason.value!.playerId)
+    return entry?.displayRank || 999
   }
 
   function getRankRewardByRank(rank: number): string | null {
@@ -422,7 +765,7 @@ export const useSeasonStore = defineStore('season', () => {
     const playerEntry = displayLeaderboard.value.find(
       (e) => e.playerId === playerSeason.value!.playerId
     )
-    const finalRank = playerEntry?.rank || 999
+    const finalRank = playerEntry?.displayRank || 999
     const finalScore = playerEntry?.score || 0
     const finalLevel = playerSeason.value.level
 
@@ -431,6 +774,16 @@ export const useSeasonStore = defineStore('season', () => {
     if (rankRewardId) {
       rewardIds.push(rankRewardId)
     }
+
+    const activityStore = useActivityStore()
+    activityStore.trackClaim(SEASON_ACTIVITY_ID, playerSeason.value.playerId, 'season_settlement', {
+      rewardType: 'settlement',
+      finalRank,
+      finalScore,
+      finalLevel,
+      regionRank: getRankForSettlement('region'),
+      friendRank: getRankForSettlement('friend'),
+    })
 
     const settlement: SeasonSettlement = {
       id: generateId(),
@@ -514,8 +867,12 @@ export const useSeasonStore = defineStore('season', () => {
     currentSeason.value.status = 'active'
     currentSeason.value.endTime = Date.now() + 30 * 24 * 60 * 60 * 1000
     frozenLeaderboard.value = null
+    frozenRegionLeaderboard.value = null
+    frozenFriendLeaderboard.value = null
     settlements.value = []
+    leaderboardCache.value = { global: null, region: null, friend: null }
     saveToStorage()
+    loadAllLeaderboards()
     startAutoCheck()
   }
 
@@ -778,7 +1135,7 @@ export const useSeasonStore = defineStore('season', () => {
   function saveToStorage() {
     try {
       const data = {
-        version: '1.0',
+        version: '1.1',
         timestamp: Date.now(),
         currentSeasonId: currentSeason.value?.id,
         currentSeasonState: currentSeason.value
@@ -794,6 +1151,8 @@ export const useSeasonStore = defineStore('season', () => {
         expRecords: expRecords.value,
         settlements: settlements.value,
         frozenLeaderboard: frozenLeaderboard.value,
+        leaderboardCache: leaderboardCache.value,
+        playerRegionId: playerRegionId.value,
       }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
     } catch (e) {
@@ -827,14 +1186,31 @@ export const useSeasonStore = defineStore('season', () => {
     rewards,
     rewardRecords,
     leaderboard,
+    regionLeaderboard,
+    friendLeaderboard,
     expRecords,
     settlements,
     frozenLeaderboard,
+    frozenRegionLeaderboard,
+    frozenFriendLeaderboard,
+    playerRegionId,
+    activeLeaderboardType,
+    leaderboardCache,
+    leaderboardRefreshState,
     isSeasonActive,
     isSeasonEnded,
     isSeasonSettled,
     isLeaderboardFrozen,
     displayLeaderboard,
+    displayRegionLeaderboard,
+    displayFriendLeaderboard,
+    currentLeaderboard,
+    playerRegion,
+    allRegions,
+    canRefreshLeaderboard,
+    currentRefreshState,
+    playerRegionRank,
+    playerFriendRank,
     currentSettlement,
     unclaimedRankRewards,
     unclaimedRankCount,
@@ -855,7 +1231,14 @@ export const useSeasonStore = defineStore('season', () => {
     loadTasks,
     loadRewards,
     loadLeaderboard,
+    loadRegionLeaderboard,
+    loadFriendLeaderboard,
+    loadAllLeaderboards,
+    refreshLeaderboard,
+    setActiveLeaderboardType,
     freezeLeaderboard,
+    generateShareData,
+    getRankForSettlement,
     settleSeason,
     claimRankReward,
     claimAllRankRewards,
@@ -865,6 +1248,8 @@ export const useSeasonStore = defineStore('season', () => {
     checkAndSettleIfEnded,
     startAutoCheck,
     stopAutoCheck,
+    startLeaderboardAutoRefresh,
+    stopLeaderboardAutoRefresh,
     updateTaskProgress,
     claimTaskReward,
     claimLevelReward,

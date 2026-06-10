@@ -8,6 +8,7 @@ import FriendPage from '@/pages/FriendPage.vue'
 import MailPage from '@/pages/MailPage.vue'
 import DungeonPage from '@/pages/DungeonPage.vue'
 import DashboardPage from '@/pages/DashboardPage.vue'
+import LeaderboardSharePage from '@/pages/LeaderboardSharePage.vue'
 import AdminLayout from '@/components/admin/AdminLayout.vue'
 import ActivityListPage from '@/pages/admin/ActivityListPage.vue'
 import ActivityEditPage from '@/pages/admin/ActivityEditPage.vue'
@@ -59,6 +60,11 @@ const routes: RouteRecordRaw[] = [
     path: '/dashboard',
     name: 'dashboard',
     component: DashboardPage,
+  },
+  {
+    path: '/leaderboard/share',
+    name: 'leaderboard-share',
+    component: LeaderboardSharePage,
   },
   {
     path: '/admin',
