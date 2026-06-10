@@ -31,18 +31,14 @@ import {
   getRankRewardId,
   getRankTierName,
   playerProfiles,
-  calculateRankScore as computeRankScoreFromProfile,
   createLeaderboardEntryFromProfile,
   buildPreviousRankMap,
   buildGlobalLeaderboard,
-  getPlayerProfile,
-  deriveSeasonLevel,
 } from '@/game/data/seasonRewards'
 import type { LeaderboardRewardType } from '@/types/season'
 import { useActivityStore } from '@/stores/activityStore'
 import { useTaskStore } from '@/stores/taskStore'
 import { useFriendStore } from '@/stores/friendStore'
-import type { Friend } from '@/types/friend'
 
 const SEASON_ACTIVITY_ID = 'act_001'
 
@@ -564,32 +560,29 @@ export const useSeasonStore = defineStore('season', () => {
       return
     }
 
-    const friendStore = useFriendStore()
-    const friendIds = new Set(
-      friendStore.acceptedFriends.map((f) => f.friendId)
+    const globalEntries = displayLeaderboard.value.length > 0
+      ? displayLeaderboard.value
+      : buildGlobalLeaderboard()
+
+    const regionEntries = globalEntries.filter(
+      (entry) => entry.regionId === playerRegionId.value
     )
 
-    const regionProfiles = playerProfiles.filter(
-      (profile) => profile.regionId === playerRegionId.value
-    )
-    const previousRankMap = buildPreviousRankMap(regionProfiles)
-
-    const entries: LeaderboardEntry[] = regionProfiles.map((profile) =>
-      createLeaderboardEntryFromProfile(
-        profile,
-        previousRankMap.get(profile.playerId) || 0,
-        friendIds.has(profile.playerId)
-      )
-    )
+    const entries: LeaderboardEntry[] = regionEntries.map((entry) => ({
+      ...entry,
+      rank: 0,
+      displayRank: 0,
+      isTied: false,
+    }))
 
     if (playerSeason.value) {
-      const playerRegion = getRegionById(playerRegionId.value)
-      if (playerRegion && playerRegion.id === playerRegionId.value) {
-        const playerEntry = createPlayerEntry(playerRegion.id, playerRegion.name, false)
-        const existingIdx = entries.findIndex((e) => e.playerId === playerSeason.value!.playerId)
-        if (existingIdx >= 0) {
-          entries[existingIdx] = playerEntry
-        } else {
+      const playerInRegion = entries.some(
+        (e) => e.playerId === playerSeason.value!.playerId
+      )
+      if (!playerInRegion) {
+        const playerRegion = getRegionById(playerRegionId.value)
+        if (playerRegion) {
+          const playerEntry = createPlayerEntry(playerRegion.id, playerRegion.name, false)
           entries.push(playerEntry)
         }
       }
@@ -606,75 +599,42 @@ export const useSeasonStore = defineStore('season', () => {
 
     const friendStore = useFriendStore()
     const friends = friendStore.acceptedFriends
+    const friendMap = new Map(friends.map((f) => [f.friendId, f]))
 
-    const friendWithScores = friends.map((friend) => {
-      const profile = getPlayerProfile(friend.friendId)
-      let score: number
-      let day: number
-      let totalOrders: number
-      let seasonLevel: number
-      let regionId: string | undefined
-      let regionName: string | undefined
+    const globalEntries = displayLeaderboard.value.length > 0
+      ? displayLeaderboard.value
+      : buildGlobalLeaderboard()
 
-      if (profile) {
-        score = computeRankScoreFromProfile(profile.day, profile.totalOrders, profile.seasonLevel)
-        day = profile.day
-        totalOrders = profile.totalOrders
-        seasonLevel = profile.seasonLevel
-        regionId = profile.regionId
-        regionName = profile.regionName
-      } else {
-        seasonLevel = deriveSeasonLevel(friend.currentDay, friend.totalOrdersCompleted)
-        score = computeRankScoreFromProfile(friend.currentDay, friend.totalOrdersCompleted, seasonLevel)
-        day = friend.currentDay
-        totalOrders = friend.totalOrdersCompleted
-        regionId = undefined
-        regionName = undefined
+    const friendEntries: LeaderboardEntry[] = []
+    for (const globalEntry of globalEntries) {
+      const friend = friendMap.get(globalEntry.playerId)
+      if (friend) {
+        friendEntries.push({
+          ...globalEntry,
+          id: `fentry_${globalEntry.playerId}`,
+          playerName: friend.friendName,
+          playerAvatar: friend.friendAvatar,
+          rank: 0,
+          displayRank: 0,
+          isTied: false,
+          isFriend: true,
+          updatedAt: Date.now(),
+        })
       }
-
-      return {
-        friend,
-        score,
-        day,
-        totalOrders,
-        seasonLevel,
-        regionId,
-        regionName,
-      }
-    })
-
-    const sortedForPrev = [...friendWithScores].sort(
-      (a, b) => b.score - a.score || b.day - a.day
-    )
-    const previousRankMap = new Map<string, number>()
-    sortedForPrev.forEach((item, index) => {
-      previousRankMap.set(item.friend.friendId, Math.max(1, index + 1))
-    })
-
-    const friendEntries: LeaderboardEntry[] = friendWithScores.map(({ friend, score, regionId, regionName }) => ({
-      id: `fentry_${friend.friendId}`,
-      playerId: friend.friendId,
-      seasonId: currentSeason.value?.id || '',
-      playerName: friend.friendName,
-      playerAvatar: friend.friendAvatar,
-      rank: 0,
-      displayRank: 0,
-      isTied: false,
-      score,
-      previousRank: previousRankMap.get(friend.friendId) || 0,
-      regionId,
-      regionName,
-      isFriend: true,
-      updatedAt: Date.now(),
-    }))
+    }
 
     let entries = [...friendEntries]
 
     if (playerSeason.value) {
-      const region = getRegionById(playerRegionId.value || '')
-      const playerEntry = createPlayerEntry(region?.id, region?.name, true)
-      playerEntry.playerName = '你'
-      entries.push(playerEntry)
+      const playerInList = entries.some(
+        (e) => e.playerId === playerSeason.value!.playerId
+      )
+      if (!playerInList) {
+        const region = getRegionById(playerRegionId.value || '')
+        const playerEntry = createPlayerEntry(region?.id, region?.name, true)
+        playerEntry.playerName = '你'
+        entries.push(playerEntry)
+      }
     }
 
     friendLeaderboard.value = calculateTiedRanks(entries)
