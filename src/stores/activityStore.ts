@@ -21,6 +21,7 @@ import type {
   ActivityArchive,
   ArchiveStatus,
   TriggerCondition,
+  ConditionGroup,
 } from '@/types/activity'
 import { mockTemplates, mockActivities, mockStatistics, mockLogs, generateMockEvents } from '@/game/data/activityTemplates'
 
@@ -298,6 +299,31 @@ export const useActivityStore = defineStore('activity', () => {
       eventType: 'view',
       metadata: { action: 'approve' },
     })
+
+    const activityStages = stages.value[id]
+    if (activityStages && activityStages.length > 0) {
+      const firstStage = activityStages[0]
+      if (!firstStage.isUnlocked) {
+        firstStage.isUnlocked = true
+        firstStage.unlockedAt = Date.now()
+        stages.value[id] = [...activityStages]
+        activity.config.stages = [...activityStages]
+
+        addLog({
+          activityId: id,
+          playerId: 'system',
+          eventType: 'view',
+          metadata: {
+            action: 'auto_unlock_stage',
+            stageId: firstStage.id,
+            stageName: firstStage.name,
+            reason: '活动上线首阶段自动解锁',
+          },
+        })
+      }
+    }
+
+    checkStageUnlocks(id)
   }
 
   function pauseActivity(id: string) {
@@ -309,7 +335,25 @@ export const useActivityStore = defineStore('activity', () => {
   }
 
   function endActivity(id: string) {
+    const activity = activities.value.find(a => a.id === id)
+    if (!activity) return
+    if (activity.status === 'ended' || activity.status === 'archived') return
+
     updateActivityStatus(id, 'ended')
+
+    addLog({
+      activityId: id,
+      playerId: 'system',
+      eventType: 'view',
+      metadata: { action: 'auto_end_activity', reason: '活动到期自动结束' },
+    })
+
+    setTimeout(() => {
+      const current = activities.value.find(a => a.id === id)
+      if (current && current.status === 'ended' && !current.archiveStatus) {
+        archiveActivity(id, 'system')
+      }
+    }, 1000)
   }
 
   function getStatistics(activityId: string) {
@@ -691,24 +735,94 @@ export const useActivityStore = defineStore('activity', () => {
     })
   }
 
-  function checkStageUnlocks(activityId: string) {
+  function validateConditionGroup(
+    group: ConditionGroup,
+    playerData: Record<string, number | string | boolean>,
+  ): boolean {
+    const results = group.conditions.map(cond => {
+      const actualValue = playerData[cond.type]
+      if (actualValue === undefined) return false
+      const numActual = Number(actualValue)
+      switch (cond.operator) {
+        case 'gt': return numActual > Number(cond.value)
+        case 'gte': return numActual >= Number(cond.value)
+        case 'lt': return numActual < Number(cond.value)
+        case 'lte': return numActual <= Number(cond.value)
+        case 'eq': return String(actualValue) === String(cond.value)
+        case 'ne': return String(actualValue) !== String(cond.value)
+        case 'between': {
+          const range = cond.value as [number, number]
+          return numActual >= range[0] && numActual <= range[1]
+        }
+        case 'contains': return String(actualValue).includes(String(cond.value))
+        default: return false
+      }
+    })
+
+    const childResults = (group.children ?? []).map(child =>
+      validateConditionGroup(child, playerData),
+    )
+
+    const allResults = [...results, ...childResults]
+    if (allResults.length === 0) return false
+
+    return group.logic === 'AND'
+      ? allResults.every(Boolean)
+      : allResults.some(Boolean)
+  }
+
+  function checkStageUnlocks(
+    activityId: string,
+    playerData: Record<string, number | string | boolean> = {},
+  ) {
     const activityStages = stages.value[activityId]
     if (!activityStages) return
 
     const now = Date.now()
+    let changed = false
+
     activityStages.forEach(stage => {
       if (stage.isUnlocked) return
+
+      let shouldUnlock = false
+
       if (stage.unlockType === 'time' && stage.unlockTime && now >= stage.unlockTime) {
+        shouldUnlock = true
+      }
+
+      if (stage.unlockType === 'condition' && stage.unlockConditions) {
+        if (validateConditionGroup(stage.unlockConditions, playerData)) {
+          shouldUnlock = true
+        }
+      }
+
+      if (shouldUnlock) {
         stage.isUnlocked = true
         stage.unlockedAt = now
+        changed = true
+
+        addLog({
+          activityId,
+          playerId: 'system',
+          eventType: 'view',
+          metadata: {
+            action: 'auto_unlock_stage',
+            stageId: stage.id,
+            stageName: stage.name,
+            unlockType: stage.unlockType,
+          },
+        })
       }
     })
 
-    stages.value[activityId] = [...activityStages]
+    if (changed) {
+      stages.value[activityId] = [...activityStages]
 
-    const activity = activities.value.find(a => a.id === activityId)
-    if (activity) {
-      activity.config.stages = [...activityStages]
+      const activity = activities.value.find(a => a.id === activityId)
+      if (activity) {
+        activity.config.stages = [...activityStages]
+        activity.updatedAt = Date.now()
+      }
     }
   }
 
@@ -1048,6 +1162,47 @@ export const useActivityStore = defineStore('activity', () => {
     return JSON.stringify(exportData, null, 2)
   }
 
+  let lifecycleTimer: ReturnType<typeof setInterval> | null = null
+
+  function initLifecycle() {
+    if (lifecycleTimer) return
+
+    lifecycleTimer = setInterval(() => {
+      runLifecycleTick()
+    }, 60 * 1000)
+
+    runLifecycleTick()
+  }
+
+  function stopLifecycle() {
+    if (lifecycleTimer) {
+      clearInterval(lifecycleTimer)
+      lifecycleTimer = null
+    }
+  }
+
+  function runLifecycleTick() {
+    const now = Date.now()
+    const activitiesToCheck = activities.value.filter(
+      a => a.status === 'active' || a.status === 'paused',
+    )
+
+    for (const activity of activitiesToCheck) {
+      if (activity.config.schedule.endTime <= now) {
+        endActivity(activity.id)
+        continue
+      }
+
+      checkStageUnlocks(activity.id)
+    }
+
+    for (const activity of activities.value) {
+      if (activity.status === 'ended' && !activity.archiveStatus) {
+        archiveActivity(activity.id, 'system')
+      }
+    }
+  }
+
   function clearStorage() {
     Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key))
     activities.value = [...mockActivities]
@@ -1119,6 +1274,8 @@ export const useActivityStore = defineStore('activity', () => {
     getArchive,
     restoreFromArchive,
     exportArchive,
+    initLifecycle,
+    stopLifecycle,
     clearStorage,
   }
 })

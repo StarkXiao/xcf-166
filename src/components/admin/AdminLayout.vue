@@ -70,7 +70,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, RouterLink, RouterView } from 'vue-router'
 import {
   Settings,
@@ -89,20 +89,27 @@ import { useActivityStore } from '@/stores/activityStore'
 const route = useRoute()
 const activityStore = useActivityStore()
 
-const menuItems = computed(() => [
-  {
-    path: '/admin/activities',
-    label: '活动管理',
-    icon: FileText,
-    badge: activityStore.pendingActivities.length > 0 ? activityStore.pendingActivities.length : null,
-  },
-  {
-    path: '/admin/templates',
-    label: '活动模板',
-    icon: Layers,
-    badge: null,
-  },
-])
+const menuItems = computed(() => {
+  const endedNotArchived = activityStore.endedActivities.filter(a => !a.archiveStatus).length
+  return [
+    {
+      path: '/admin/activities',
+      label: '活动管理',
+      icon: FileText,
+      badge: activityStore.pendingActivities.length > 0
+        ? activityStore.pendingActivities.length
+        : endedNotArchived > 0
+          ? endedNotArchived
+          : null,
+    },
+    {
+      path: '/admin/templates',
+      label: '活动模板',
+      icon: Layers,
+      badge: null,
+    },
+  ]
+})
 
 function isActive(path: string) {
   return route.path.startsWith(path)
@@ -116,5 +123,13 @@ const currentPageTitle = computed(() => {
   if (path.includes('/admin/activities')) return '活动管理'
   if (path.includes('/admin/templates')) return '活动模板'
   return '控制台'
+})
+
+onMounted(() => {
+  activityStore.initLifecycle()
+})
+
+onUnmounted(() => {
+  activityStore.stopLifecycle()
 })
 </script>

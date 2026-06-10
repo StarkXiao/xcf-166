@@ -212,9 +212,24 @@
                   <span class="text-gray-400">解锁时间:</span>
                   <span class="text-white ml-1">{{ formatDate(stage.unlockTime) }}</span>
                 </div>
+                <div v-if="stage.unlockType === 'condition' && stage.unlockConditions">
+                  <span class="text-gray-400">条件逻辑:</span>
+                  <span class="text-white ml-1">{{ stage.unlockConditions.logic }} ({{ stage.unlockConditions.conditions.length }}条)</span>
+                </div>
                 <div v-if="stage.unlockedAt">
                   <span class="text-gray-400">解锁于:</span>
                   <span class="text-green-400 ml-1">{{ formatDate(stage.unlockedAt) }}</span>
+                </div>
+              </div>
+              <div v-if="stage.unlockType === 'condition' && stage.unlockConditions && stage.unlockConditions.conditions.length > 0" class="mt-2 space-y-1">
+                <div
+                  v-for="cond in stage.unlockConditions.conditions"
+                  :key="cond.id"
+                  class="flex items-center gap-2 text-xs bg-gray-700/40 rounded px-2 py-1"
+                >
+                  <span class="text-purple-300">{{ conditionTypeLabels[cond.type] || cond.type }}</span>
+                  <span class="text-gray-400">{{ operatorLabels[cond.operator] }}</span>
+                  <span class="text-yellow-300">{{ JSON.stringify(cond.value) }}</span>
                 </div>
               </div>
             </div>
@@ -262,6 +277,57 @@
                     type="datetime-local"
                     class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-purple-500"
                   />
+                </div>
+                <div v-if="newStageUnlockType === 'condition'" class="col-span-2">
+                  <label class="block text-xs text-gray-500 mb-1">解锁条件</label>
+                  <div class="space-y-2 bg-gray-700/50 rounded p-3">
+                    <div class="flex items-center gap-2 mb-2">
+                      <span class="text-xs text-gray-400">逻辑:</span>
+                      <select
+                        v-model="newStageConditionLogic"
+                        class="px-2 py-1 bg-gray-600 border border-gray-500 rounded text-xs text-white focus:outline-none"
+                      >
+                        <option value="AND">全部满足 (AND)</option>
+                        <option value="OR">任一满足 (OR)</option>
+                      </select>
+                    </div>
+                    <div
+                      v-for="(cond, ci) in newStageConditions"
+                      :key="ci"
+                      class="flex items-center gap-2"
+                    >
+                      <select
+                        v-model="cond.type"
+                        class="flex-1 px-2 py-1.5 bg-gray-600 border border-gray-500 rounded text-xs text-white focus:outline-none"
+                      >
+                        <option v-for="(label, key) in conditionTypeLabels" :key="key" :value="key">{{ label }}</option>
+                      </select>
+                      <select
+                        v-model="cond.operator"
+                        class="w-20 px-2 py-1.5 bg-gray-600 border border-gray-500 rounded text-xs text-white focus:outline-none"
+                      >
+                        <option v-for="(label, key) in operatorLabels" :key="key" :value="key">{{ label }}</option>
+                      </select>
+                      <input
+                        v-model="cond.value"
+                        type="text"
+                        class="flex-1 px-2 py-1.5 bg-gray-600 border border-gray-500 rounded text-xs text-white focus:outline-none"
+                        placeholder="值"
+                      />
+                      <button
+                        @click="newStageConditions.splice(ci, 1)"
+                        class="p-1 text-red-400 hover:text-red-300"
+                      >
+                        <X class="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <button
+                      @click="addNewStageCondition"
+                      class="px-2 py-1 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors"
+                    >
+                      + 添加条件
+                    </button>
+                  </div>
                 </div>
                 <div class="col-span-2">
                   <button
@@ -689,6 +755,7 @@ import type {
   RewardReissueRecord,
   RewardReissueStatus,
   ActivityArchive,
+  TriggerConditionType,
 } from '@/types/activity'
 
 const route = useRoute()
@@ -743,6 +810,30 @@ const newStageName = ref('')
 const newStageDescription = ref('')
 const newStageUnlockType = ref<StageUnlockType>('time')
 const newStageUnlockTime = ref('')
+const newStageConditionLogic = ref<'AND' | 'OR'>('AND')
+const newStageConditions = ref<Array<{ type: TriggerConditionType; operator: string; value: string; description: string }>>([])
+
+const conditionTypeLabels: Record<string, string> = {
+  player_level: '玩家等级',
+  player_vip: 'VIP等级',
+  login_days: '登录天数',
+  order_count: '订单数量',
+  total_payment: '累计充值',
+  first_login: '首次登录',
+  date_range: '日期范围',
+  custom_event: '自定义事件',
+}
+
+const operatorLabels: Record<string, string> = {
+  gt: '大于',
+  gte: '大于等于',
+  lt: '小于',
+  lte: '小于等于',
+  eq: '等于',
+  ne: '不等于',
+  between: '介于',
+  contains: '包含',
+}
 
 const validationPlayerId = ref('')
 const validationPlayerLevel = ref<number | undefined>(undefined)
@@ -878,11 +969,27 @@ function addNewStage() {
     ? new Date(newStageUnlockTime.value).getTime()
     : undefined
 
+  let unlockConditions = undefined
+  if (newStageUnlockType.value === 'condition' && newStageConditions.value.length > 0) {
+    unlockConditions = {
+      id: activityStore.generateId('cond'),
+      logic: newStageConditionLogic.value,
+      conditions: newStageConditions.value.map(c => ({
+        id: activityStore.generateId('sc'),
+        type: c.type,
+        operator: c.operator as any,
+        value: isNaN(Number(c.value)) ? c.value : Number(c.value),
+        description: `${conditionTypeLabels[c.type] || c.type} ${operatorLabels[c.operator] || c.operator} ${c.value}`,
+      })),
+    }
+  }
+
   activityStore.addStage(activity.value.id, {
     name: newStageName.value,
     description: newStageDescription.value,
     unlockType: newStageUnlockType.value,
     unlockTime,
+    unlockConditions,
     order: activityStages.value.length + 1,
     rewardRules: [],
   })
@@ -891,6 +998,17 @@ function addNewStage() {
   newStageDescription.value = ''
   newStageUnlockType.value = 'time'
   newStageUnlockTime.value = ''
+  newStageConditionLogic.value = 'AND'
+  newStageConditions.value = []
+}
+
+function addNewStageCondition() {
+  newStageConditions.value.push({
+    type: 'player_level',
+    operator: 'gte',
+    value: '',
+    description: '',
+  })
 }
 
 function removeStageById(stageId: string) {
@@ -975,7 +1093,7 @@ function toggleStatus() {
 }
 
 function endActivity() {
-  if (activity.value && confirm('确定要结束此活动吗？此操作不可撤销。')) {
+  if (activity.value && confirm('确定要结束此活动吗？结束后将自动触发数据归档，此操作不可撤销。')) {
     activityStore.endActivity(activity.value.id)
   }
 }
