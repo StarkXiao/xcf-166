@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSeasonStore } from '@/stores/seasonStore'
-import { rankRewards } from '@/game/data/seasonRewards'
-import type { LeaderboardType, LeaderboardShareData } from '@/types/season'
+import { leaderboardRewardConfigs, getRewardById, getRankRewardTier } from '@/game/data/seasonRewards'
+import type { LeaderboardType, LeaderboardShareData, LeaderboardRewardType } from '@/types/season'
 import {
   Trophy,
   TrendingUp,
@@ -112,14 +112,38 @@ function getRankStyle(rank: number) {
   }
 }
 
-function getRankReward(rank: number) {
-  const reward = rankRewards.find((r) => {
-    if (typeof r.rank === 'number') return r.rank === rank
-    const [min, max] = r.rank.split('-').map(Number)
-    if (r.rank === '101+') return rank >= 101
-    return rank >= min && rank <= max
-  })
-  return reward
+const currentRewardTiers = computed(() => {
+  return leaderboardRewardConfigs[activeTab.value as LeaderboardRewardType]?.tiers || []
+})
+
+const currentRewardConfigName = computed(() => {
+  return leaderboardRewardConfigs[activeTab.value as LeaderboardRewardType]?.name || '排行奖励'
+})
+
+function getRankTierName(rank: number): string {
+  const tier = getRankRewardTier(rank, activeTab.value as LeaderboardRewardType)
+  return tier?.tierName || ''
+}
+
+function getTierRewardInfo(tier: { minRank: number; maxRank?: number; tierName: string; rewardId: string }) {
+  const reward = getRewardById(tier.rewardId)
+  const rankText = tier.maxRank ? `${tier.minRank}-${tier.maxRank}` : `${tier.minRank}+`
+  return {
+    rank: rankText,
+    name: tier.tierName,
+    reward: reward ? (typeof reward.value === 'number' ? `${reward.value}金币` : reward.description) : tier.tierName,
+    rewardId: tier.rewardId,
+    minRank: tier.minRank,
+    maxRank: tier.maxRank,
+  }
+}
+
+function isCurrentRankTier(tier: { minRank: number; maxRank?: number }): boolean {
+  const rank = currentRankForReward.value
+  if (tier.maxRank !== undefined) {
+    return rank >= tier.minRank && rank <= tier.maxRank
+  }
+  return rank >= tier.minRank
 }
 
 function getRankDisplay(rank: number, isTied: boolean, tieCount?: number) {
@@ -376,9 +400,9 @@ function getShareTitle() {
               <div class="text-sm text-gray-500">完成任务</div>
               <div class="text-2xl font-bold text-green-400">{{ seasonStore.completedTasksCount }}</div>
             </div>
-            <div v-if="getRankReward(currentRankForReward)" class="ml-auto">
+            <div v-if="getRankTierName(currentRankForReward)" class="ml-auto">
               <div class="text-sm text-gray-500">当前档位奖励</div>
-              <div class="text-lg font-medium text-amber-300">{{ getRankReward(currentRankForReward)?.reward }}</div>
+              <div class="text-lg font-medium text-amber-300">{{ getRankTierName(currentRankForReward) }}</div>
             </div>
           </div>
         </div>
@@ -446,7 +470,7 @@ function getShareTitle() {
                 </div>
                 <div class="flex items-center gap-3">
                   <span class="text-sm" :class="getRankStyle(entry.displayRank).rankColor">
-                    {{ getRankReward(entry.displayRank)?.name }}
+                    {{ getRankTierName(entry.displayRank) }}
                   </span>
                   <div class="flex items-center gap-1" :class="getRankChange(entry.displayRank, entry.previousRank).color">
                     <component :is="getRankChange(entry.displayRank, entry.previousRank).icon" :size="14" />
@@ -468,40 +492,42 @@ function getShareTitle() {
         <div class="p-6 rounded-2xl bg-gray-900/60 border border-gray-800 h-full">
           <h3 class="text-xl font-bold text-white mb-6 flex items-center gap-3">
             <Gift :size="24" class="text-amber-400" />
-            排行奖励
+            {{ currentRewardConfigName }}
           </h3>
 
           <div class="space-y-3">
             <div
-              v-for="reward in rankRewards"
-              :key="reward.rank"
+              v-for="tier in currentRewardTiers"
+              :key="tier.rewardId"
               class="reward-tier p-4 rounded-xl bg-gray-800/40 border border-gray-700/30 transition-all duration-300 hover:border-purple-500/30"
               :class="{
-                'border-amber-500/50 bg-amber-500/10': reward.rank === 1,
-                'border-gray-400/50 bg-gray-400/10': reward.rank === 2,
-                'border-orange-500/50 bg-orange-500/10': reward.rank === 3,
-                'border-purple-500/50 bg-purple-500/10': getRankReward(currentRankForReward)?.rank === reward.rank,
+                'border-amber-500/50 bg-amber-500/10': tier.minRank === 1,
+                'border-gray-400/50 bg-gray-400/10': tier.minRank === 2,
+                'border-orange-500/50 bg-orange-500/10': tier.minRank === 3,
+                'border-purple-500/50 bg-purple-500/10': isCurrentRankTier(tier),
               }"
             >
               <div class="flex items-center gap-3 mb-2">
                 <div class="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold"
                      :class="{
-                       'bg-gradient-to-br from-amber-400 to-yellow-500': reward.rank === 1,
-                       'bg-gradient-to-br from-gray-300 to-gray-400': reward.rank === 2,
-                       'bg-gradient-to-br from-orange-400 to-amber-600': reward.rank === 3,
-                       'bg-gray-700': typeof reward.rank !== 'number',
+                       'bg-gradient-to-br from-amber-400 to-yellow-500': tier.minRank === 1,
+                       'bg-gradient-to-br from-gray-300 to-gray-400': tier.minRank === 2,
+                       'bg-gradient-to-br from-orange-400 to-amber-600': tier.minRank === 3,
+                       'bg-gray-700': tier.minRank > 3,
                      }">
-                  <Crown v-if="reward.rank === 1" :size="20" />
-                  <Medal v-else-if="reward.rank === 2" :size="20" />
-                  <Award v-else-if="reward.rank === 3" :size="20" />
-                  <span v-else>#{{ reward.rank }}</span>
+                  <Crown v-if="tier.minRank === 1" :size="20" />
+                  <Medal v-else-if="tier.minRank === 2" :size="20" />
+                  <Award v-else-if="tier.minRank === 3" :size="20" />
+                  <span v-else>#{{ tier.minRank }}</span>
                 </div>
                 <div class="flex-1">
-                  <span class="font-bold text-white">{{ reward.name }}</span>
-                  <div v-if="getRankReward(currentRankForReward)?.rank === reward.rank" class="text-xs text-purple-300">当前档位</div>
+                  <span class="font-bold text-white">{{ tier.tierName }}</span>
+                  <div v-if="isCurrentRankTier(tier)" class="text-xs text-purple-300">当前档位</div>
                 </div>
               </div>
-              <p class="text-sm text-gray-400 ml-13">{{ reward.reward }}</p>
+              <p class="text-sm text-gray-400 ml-13">
+                第{{ tier.maxRank ? tier.minRank + '-' + tier.maxRank : tier.minRank + '名及以后' }}名
+              </p>
             </div>
           </div>
         </div>

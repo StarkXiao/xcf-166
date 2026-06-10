@@ -24,17 +24,18 @@ import {
   getRewardsBySeasonId,
   getRewardById,
   mockLeaderboard,
-  rankRewardTiers,
   regions,
-  getFriendLeaderboard,
-  getRegionLeaderboard,
   calculateTiedRanks,
   getRandomRegion,
   getRegionById,
+  getRankRewardId,
+  getRankTierName,
 } from '@/game/data/seasonRewards'
+import type { LeaderboardRewardType } from '@/types/season'
 import { useActivityStore } from '@/stores/activityStore'
 import { useTaskStore } from '@/stores/taskStore'
 import { useFriendStore } from '@/stores/friendStore'
+import type { Friend } from '@/types/friend'
 
 const SEASON_ACTIVITY_ID = 'act_001'
 
@@ -200,7 +201,12 @@ export const useSeasonStore = defineStore('season', () => {
 
   const unclaimedRankRewards = computed(() => {
     if (!currentSettlement.value || currentSettlement.value.claimed) return []
-    return currentSettlement.value.rewardIds
+    const allRewardIds = [
+      ...currentSettlement.value.rewardIds,
+      ...(currentSettlement.value.regionRewardIds || []),
+      ...(currentSettlement.value.friendRewardIds || []),
+    ]
+    return allRewardIds
       .map((rewardId) => getRewardById(rewardId))
       .filter((r): r is SeasonReward => r !== undefined)
   })
@@ -451,7 +457,13 @@ export const useSeasonStore = defineStore('season', () => {
       expRecords.value = savedData.expRecords
     }
     if (savedData && savedData.settlements) {
-      settlements.value = savedData.settlements
+      settlements.value = savedData.settlements.map((s: SeasonSettlement) => ({
+        ...s,
+        regionRank: s.regionRank ?? 999,
+        friendRank: s.friendRank ?? 999,
+        regionRewardIds: s.regionRewardIds || [],
+        friendRewardIds: s.friendRewardIds || [],
+      }))
     }
     if (savedData && savedData.frozenLeaderboard) {
       frozenLeaderboard.value = savedData.frozenLeaderboard
@@ -505,7 +517,15 @@ export const useSeasonStore = defineStore('season', () => {
       return
     }
 
-    let entries = [...mockLeaderboard]
+    const friendStore = useFriendStore()
+    const friendIds = new Set(
+      friendStore.acceptedFriends.map((f) => f.friendId)
+    )
+
+    let entries: LeaderboardEntry[] = mockLeaderboard.map((entry) => ({
+      ...entry,
+      isFriend: friendIds.has(entry.playerId),
+    }))
 
     if (playerSeason.value) {
       const region = getRegionById(playerRegionId.value || '')
@@ -527,15 +547,36 @@ export const useSeasonStore = defineStore('season', () => {
       return
     }
 
-    let entries = getRegionLeaderboard(playerRegionId.value)
+    const globalEntries = displayLeaderboard.value.length > 0 ? displayLeaderboard.value : mockLeaderboard
+    const regionEntries = globalEntries.filter(
+      (entry) => entry.regionId === playerRegionId.value
+    )
 
-    if (playerSeason.value) {
+    const entries: LeaderboardEntry[] = regionEntries.map((entry) => ({
+      ...entry,
+      rank: 0,
+      displayRank: 0,
+      isTied: false,
+    }))
+
+    const playerInRegion = entries.some(
+      (e) => e.playerId === playerSeason.value?.playerId
+    )
+
+    if (playerSeason.value && !playerInRegion) {
       const region = getRegionById(playerRegionId.value)
       const playerEntry = createPlayerEntry(region?.id, region?.name, false)
-      entries = [...entries, playerEntry]
+      entries.push(playerEntry)
     }
 
     regionLeaderboard.value = calculateTiedRanks(entries)
+  }
+
+  function calculateFriendSeasonScore(friend: Friend): number {
+    const baseScore = friend.currentDay * 50 + friend.totalOrdersCompleted * 20
+    const friendshipBonus = friend.friendshipLevel * 100
+    const randomFactor = Math.floor(Math.random() * 500)
+    return baseScore + friendshipBonus + randomFactor
   }
 
   function loadFriendLeaderboard() {
@@ -544,12 +585,33 @@ export const useSeasonStore = defineStore('season', () => {
       return
     }
 
-    let entries = getFriendLeaderboard()
+    const friendStore = useFriendStore()
+    const friends = friendStore.acceptedFriends
+
+    const friendEntries: LeaderboardEntry[] = friends.map((friend, index) => ({
+      id: generateId(),
+      playerId: friend.friendId,
+      seasonId: currentSeason.value?.id || '',
+      playerName: friend.friendName,
+      playerAvatar: friend.friendAvatar,
+      rank: 0,
+      displayRank: 0,
+      isTied: false,
+      score: calculateFriendSeasonScore(friend),
+      previousRank: Math.max(1, index + 1 + Math.floor(Math.random() * 3) - 1),
+      regionId: undefined,
+      regionName: undefined,
+      isFriend: true,
+      updatedAt: Date.now(),
+    }))
+
+    let entries = [...friendEntries]
 
     if (playerSeason.value) {
       const region = getRegionById(playerRegionId.value || '')
       const playerEntry = createPlayerEntry(region?.id, region?.name, true)
-      entries = [...entries, playerEntry]
+      playerEntry.playerName = '你'
+      entries.push(playerEntry)
     }
 
     friendLeaderboard.value = calculateTiedRanks(entries)
@@ -560,6 +622,12 @@ export const useSeasonStore = defineStore('season', () => {
     loadLeaderboard()
     loadRegionLeaderboard()
     loadFriendLeaderboard()
+  }
+
+  async function refreshAllLeaderboards(force: boolean = false): Promise<void> {
+    await refreshLeaderboard('global', force)
+    await refreshLeaderboard('region', force)
+    await refreshLeaderboard('friend', force)
   }
 
   function isLeaderboardCacheValid(type: LeaderboardType): boolean {
@@ -746,14 +814,8 @@ export const useSeasonStore = defineStore('season', () => {
     return entry?.displayRank || 999
   }
 
-  function getRankRewardByRank(rank: number): string | null {
-    const tier = rankRewardTiers.find((t) => {
-      if (t.maxRank !== undefined) {
-        return rank >= t.minRank && rank <= t.maxRank
-      }
-      return rank >= t.minRank
-    })
-    return tier ? tier.rewardId : null
+  function getRankRewardByRank(rank: number, type: LeaderboardRewardType = 'global'): string | null {
+    return getRankRewardId(rank, type)
   }
 
   function settleSeason(): boolean {
@@ -769,11 +831,21 @@ export const useSeasonStore = defineStore('season', () => {
     const finalScore = playerEntry?.score || 0
     const finalLevel = playerSeason.value.level
 
+    const regionRank = getRankForSettlement('region')
+    const friendRank = getRankForSettlement('friend')
+
     const rewardIds: string[] = []
-    const rankRewardId = getRankRewardByRank(finalRank)
-    if (rankRewardId) {
-      rewardIds.push(rankRewardId)
-    }
+    const regionRewardIds: string[] = []
+    const friendRewardIds: string[] = []
+
+    const globalRewardId = getRankRewardByRank(finalRank, 'global')
+    if (globalRewardId) rewardIds.push(globalRewardId)
+
+    const regionRewardId = getRankRewardByRank(regionRank, 'region')
+    if (regionRewardId) regionRewardIds.push(regionRewardId)
+
+    const friendRewardId = getRankRewardByRank(friendRank, 'friend')
+    if (friendRewardId) friendRewardIds.push(friendRewardId)
 
     const activityStore = useActivityStore()
     activityStore.trackClaim(SEASON_ACTIVITY_ID, playerSeason.value.playerId, 'season_settlement', {
@@ -781,8 +853,10 @@ export const useSeasonStore = defineStore('season', () => {
       finalRank,
       finalScore,
       finalLevel,
-      regionRank: getRankForSettlement('region'),
-      friendRank: getRankForSettlement('friend'),
+      regionRank,
+      friendRank,
+      regionRewardCount: regionRewardIds.length,
+      friendRewardCount: friendRewardIds.length,
     })
 
     const settlement: SeasonSettlement = {
@@ -793,6 +867,10 @@ export const useSeasonStore = defineStore('season', () => {
       finalScore,
       finalLevel,
       rewardIds,
+      regionRank,
+      friendRank,
+      regionRewardIds,
+      friendRewardIds,
       settledAt: Date.now(),
       claimed: false,
     }
@@ -810,33 +888,50 @@ export const useSeasonStore = defineStore('season', () => {
 
   function claimRankReward(rewardId: string): boolean {
     if (!currentSettlement.value || currentSettlement.value.claimed) return false
-    if (!currentSettlement.value.rewardIds.includes(rewardId)) return false
+
+    const allRewardIds = [
+      ...currentSettlement.value.rewardIds,
+      ...(currentSettlement.value.regionRewardIds || []),
+      ...(currentSettlement.value.friendRewardIds || []),
+    ]
+    if (!allRewardIds.includes(rewardId)) return false
     if (isRewardClaimed(rewardId)) return false
 
     const reward = getRewardById(rewardId)
     if (!reward) return false
 
+    let source: 'rank' | 'region_rank' | 'friend_rank' = 'rank'
+    if ((currentSettlement.value.regionRewardIds || []).includes(rewardId)) {
+      source = 'region_rank'
+    } else if ((currentSettlement.value.friendRewardIds || []).includes(rewardId)) {
+      source = 'friend_rank'
+    }
+
     const record: RewardRecord = {
       id: generateId(),
       playerSeasonId: playerSeason.value?.id || '',
       rewardId,
-      source: 'rank',
+      source,
       claimedAt: Date.now(),
     }
     rewardRecords.value.push(record)
 
-    const allClaimed = currentSettlement.value.rewardIds.every((id) => isRewardClaimed(id))
-    if (allClaimed) {
+    const globalClaimed = currentSettlement.value.rewardIds.every((id) => isRewardClaimed(id))
+    const regionClaimed = (currentSettlement.value.regionRewardIds || []).every((id) => isRewardClaimed(id))
+    const friendClaimed = (currentSettlement.value.friendRewardIds || []).every((id) => isRewardClaimed(id))
+    if (globalClaimed && regionClaimed && friendClaimed) {
       currentSettlement.value.claimed = true
       currentSettlement.value.claimedAt = Date.now()
     }
 
     const activityStore = useActivityStore()
     activityStore.trackClaim(SEASON_ACTIVITY_ID, playerSeason.value?.playerId || 'unknown', rewardId, {
-      rewardType: 'rank',
+      rewardType: source,
       rewardName: reward.name,
       rewardRarity: reward.rarity,
       finalRank: currentSettlement.value.finalRank,
+      regionRank: currentSettlement.value.regionRank,
+      friendRank: currentSettlement.value.friendRank,
     })
 
     saveToStorage()
@@ -846,8 +941,14 @@ export const useSeasonStore = defineStore('season', () => {
   function claimAllRankRewards(): boolean {
     if (!currentSettlement.value || currentSettlement.value.claimed) return false
 
+    const allRewardIds = [
+      ...currentSettlement.value.rewardIds,
+      ...(currentSettlement.value.regionRewardIds || []),
+      ...(currentSettlement.value.friendRewardIds || []),
+    ]
+
     let success = false
-    currentSettlement.value.rewardIds.forEach((rewardId) => {
+    allRewardIds.forEach((rewardId) => {
       if (!isRewardClaimed(rewardId)) {
         const result = claimRankReward(rewardId)
         if (result) success = true
@@ -1135,7 +1236,7 @@ export const useSeasonStore = defineStore('season', () => {
   function saveToStorage() {
     try {
       const data = {
-        version: '1.1',
+        version: '1.2',
         timestamp: Date.now(),
         currentSeasonId: currentSeason.value?.id,
         currentSeasonState: currentSeason.value
@@ -1231,14 +1332,17 @@ export const useSeasonStore = defineStore('season', () => {
     loadTasks,
     loadRewards,
     loadLeaderboard,
+    calculateFriendSeasonScore,
     loadRegionLeaderboard,
     loadFriendLeaderboard,
     loadAllLeaderboards,
+    refreshAllLeaderboards,
     refreshLeaderboard,
     setActiveLeaderboardType,
     freezeLeaderboard,
     generateShareData,
     getRankForSettlement,
+    getRankRewardByRank,
     settleSeason,
     claimRankReward,
     claimAllRankRewards,

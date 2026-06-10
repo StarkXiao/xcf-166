@@ -1,14 +1,56 @@
-import type { SeasonReward, RankRewardTier, LeaderboardEntry, Region } from '@/types/season'
+import type {
+  SeasonReward,
+  RankRewardTier,
+  LeaderboardEntry,
+  Region,
+  LeaderboardRewardType,
+  LeaderboardRewardConfig,
+} from '@/types/season'
 
-export const rankRewardTiers: RankRewardTier[] = [
-  { minRank: 1, maxRank: 1, rewardId: 'reward_rank_1', tierName: '至尊王者' },
-  { minRank: 2, maxRank: 2, rewardId: 'reward_rank_2', tierName: '荣耀大师' },
-  { minRank: 3, maxRank: 3, rewardId: 'reward_rank_3', tierName: '璀璨钻石' },
-  { minRank: 4, maxRank: 10, rewardId: 'reward_rank_4_10', tierName: '尊贵铂金' },
-  { minRank: 11, maxRank: 50, rewardId: 'reward_rank_11_50', tierName: '坚韧黄金' },
-  { minRank: 51, maxRank: 100, rewardId: 'reward_rank_51_100', tierName: '不屈白银' },
-  { minRank: 101, rewardId: 'reward_rank_101_plus', tierName: '英勇青铜' },
+export const globalRankRewardTiers: RankRewardTier[] = [
+  { minRank: 1, maxRank: 1, rewardId: 'reward_rank_global_1', tierName: '全服至尊' },
+  { minRank: 2, maxRank: 2, rewardId: 'reward_rank_global_2', tierName: '全服荣耀' },
+  { minRank: 3, maxRank: 3, rewardId: 'reward_rank_global_3', tierName: '全服璀璨' },
+  { minRank: 4, maxRank: 10, rewardId: 'reward_rank_global_4_10', tierName: '全服铂金' },
+  { minRank: 11, maxRank: 50, rewardId: 'reward_rank_global_11_50', tierName: '全服黄金' },
+  { minRank: 51, maxRank: 100, rewardId: 'reward_rank_global_51_100', tierName: '全服白银' },
+  { minRank: 101, rewardId: 'reward_rank_global_101_plus', tierName: '全服青铜' },
 ]
+
+export const regionRankRewardTiers: RankRewardTier[] = [
+  { minRank: 1, maxRank: 1, rewardId: 'reward_rank_region_1', tierName: '分区霸主' },
+  { minRank: 2, maxRank: 3, rewardId: 'reward_rank_region_2_3', tierName: '分区精英' },
+  { minRank: 4, maxRank: 10, rewardId: 'reward_rank_region_4_10', tierName: '分区铂金' },
+  { minRank: 11, maxRank: 30, rewardId: 'reward_rank_region_11_30', tierName: '分区黄金' },
+  { minRank: 31, rewardId: 'reward_rank_region_31_plus', tierName: '分区白银' },
+]
+
+export const friendRankRewardTiers: RankRewardTier[] = [
+  { minRank: 1, maxRank: 1, rewardId: 'reward_rank_friend_1', tierName: '好友之王' },
+  { minRank: 2, maxRank: 3, rewardId: 'reward_rank_friend_2_3', tierName: '好友精英' },
+  { minRank: 4, maxRank: 5, rewardId: 'reward_rank_friend_4_5', tierName: '好友黄金' },
+  { minRank: 6, rewardId: 'reward_rank_friend_6_plus', tierName: '好友白银' },
+]
+
+export const rankRewardTiers = globalRankRewardTiers
+
+export const leaderboardRewardConfigs: Record<LeaderboardRewardType, LeaderboardRewardConfig> = {
+  global: {
+    type: 'global',
+    tiers: globalRankRewardTiers,
+    name: '全服榜奖励',
+  },
+  region: {
+    type: 'region',
+    tiers: regionRankRewardTiers,
+    name: '分区榜奖励',
+  },
+  friend: {
+    type: 'friend',
+    tiers: friendRankRewardTiers,
+    name: '好友榜奖励',
+  },
+}
 
 export const rankRewards = [
   { rank: 1, name: '至尊王者', reward: '10000金钱 + 传说称号' },
@@ -280,16 +322,211 @@ export const seasonRewards: SeasonReward[] = [
     isFree: true,
   },
   {
-    id: 'reward_rank_101_plus',
+    id: 'reward_rank_global_1',
+    seasonId: 'season_001',
+    type: 'title',
+    level: 0,
+    rank: 1,
+    name: '全服至尊',
+    description: '全服排行榜第1名奖励',
+    icon: 'Crown',
+    rarity: 'legendary',
+    value: 'title_global_1',
+    isFree: true,
+  },
+  {
+    id: 'reward_rank_global_2',
+    seasonId: 'season_001',
+    type: 'title',
+    level: 0,
+    rank: 2,
+    name: '全服荣耀',
+    description: '全服排行榜第2名奖励',
+    icon: 'Medal',
+    rarity: 'epic',
+    value: 'title_global_2',
+    isFree: true,
+  },
+  {
+    id: 'reward_rank_global_3',
+    seasonId: 'season_001',
+    type: 'badge',
+    level: 0,
+    rank: 3,
+    name: '全服璀璨',
+    description: '全服排行榜第3名奖励',
+    icon: 'Award',
+    rarity: 'epic',
+    value: 'badge_global_3',
+    isFree: true,
+  },
+  {
+    id: 'reward_rank_global_4_10',
+    seasonId: 'season_001',
+    type: 'badge',
+    level: 0,
+    rank: 10,
+    name: '全服铂金',
+    description: '全服排行榜4-10名奖励',
+    icon: 'Star',
+    rarity: 'rare',
+    value: 'badge_global_4_10',
+    isFree: true,
+  },
+  {
+    id: 'reward_rank_global_11_50',
+    seasonId: 'season_001',
+    type: 'item',
+    level: 0,
+    rank: 50,
+    name: '全服黄金',
+    description: '全服排行榜11-50名奖励',
+    icon: 'Gift',
+    rarity: 'rare',
+    value: 'item_global_11_50',
+    isFree: true,
+  },
+  {
+    id: 'reward_rank_global_51_100',
+    seasonId: 'season_001',
+    type: 'currency',
+    level: 0,
+    rank: 100,
+    name: '全服白银',
+    description: '全服排行榜51-100名奖励',
+    icon: 'Coins',
+    rarity: 'uncommon',
+    value: 1000,
+    isFree: true,
+  },
+  {
+    id: 'reward_rank_global_101_plus',
     seasonId: 'season_001',
     type: 'currency',
     level: 0,
     rank: 999,
-    name: '英勇青铜',
-    description: '赛季排行榜101名及以后奖励',
+    name: '全服青铜',
+    description: '全服排行榜101名及以后奖励',
     icon: 'Coins',
     rarity: 'common',
-    value: 200,
+    value: 500,
+    isFree: true,
+  },
+  {
+    id: 'reward_rank_region_1',
+    seasonId: 'season_001',
+    type: 'title',
+    level: 0,
+    rank: 1,
+    name: '分区霸主',
+    description: '分区排行榜第1名奖励',
+    icon: 'Crown',
+    rarity: 'epic',
+    value: 'title_region_1',
+    isFree: true,
+  },
+  {
+    id: 'reward_rank_region_2_3',
+    seasonId: 'season_001',
+    type: 'badge',
+    level: 0,
+    rank: 3,
+    name: '分区精英',
+    description: '分区排行榜2-3名奖励',
+    icon: 'Award',
+    rarity: 'rare',
+    value: 'badge_region_2_3',
+    isFree: true,
+  },
+  {
+    id: 'reward_rank_region_4_10',
+    seasonId: 'season_001',
+    type: 'badge',
+    level: 0,
+    rank: 10,
+    name: '分区铂金',
+    description: '分区排行榜4-10名奖励',
+    icon: 'Star',
+    rarity: 'rare',
+    value: 'badge_region_4_10',
+    isFree: true,
+  },
+  {
+    id: 'reward_rank_region_11_30',
+    seasonId: 'season_001',
+    type: 'item',
+    level: 0,
+    rank: 30,
+    name: '分区黄金',
+    description: '分区排行榜11-30名奖励',
+    icon: 'Gift',
+    rarity: 'uncommon',
+    value: 'item_region_11_30',
+    isFree: true,
+  },
+  {
+    id: 'reward_rank_region_31_plus',
+    seasonId: 'season_001',
+    type: 'currency',
+    level: 0,
+    rank: 999,
+    name: '分区白银',
+    description: '分区排行榜31名及以后奖励',
+    icon: 'Coins',
+    rarity: 'common',
+    value: 300,
+    isFree: true,
+  },
+  {
+    id: 'reward_rank_friend_1',
+    seasonId: 'season_001',
+    type: 'title',
+    level: 0,
+    rank: 1,
+    name: '好友之王',
+    description: '好友排行榜第1名奖励',
+    icon: 'Crown',
+    rarity: 'rare',
+    value: 'title_friend_1',
+    isFree: true,
+  },
+  {
+    id: 'reward_rank_friend_2_3',
+    seasonId: 'season_001',
+    type: 'badge',
+    level: 0,
+    rank: 3,
+    name: '好友精英',
+    description: '好友排行榜2-3名奖励',
+    icon: 'Award',
+    rarity: 'uncommon',
+    value: 'badge_friend_2_3',
+    isFree: true,
+  },
+  {
+    id: 'reward_rank_friend_4_5',
+    seasonId: 'season_001',
+    type: 'item',
+    level: 0,
+    rank: 5,
+    name: '好友黄金',
+    description: '好友排行榜4-5名奖励',
+    icon: 'Gift',
+    rarity: 'uncommon',
+    value: 'item_friend_4_5',
+    isFree: true,
+  },
+  {
+    id: 'reward_rank_friend_6_plus',
+    seasonId: 'season_001',
+    type: 'currency',
+    level: 0,
+    rank: 999,
+    name: '好友白银',
+    description: '好友排行榜6名及以后奖励',
+    icon: 'Coins',
+    rarity: 'common',
+    value: 100,
     isFree: true,
   },
 ]
@@ -364,43 +601,6 @@ export const mockLeaderboard = [
   createMockEntry('15', 'player_015', '轮回镜', '🔮', 4500, 14, 'region_005', '华中区'),
 ]
 
-export const mockFriendLeaderboard = [
-  createMockEntry('f1', 'player_001', '幽冥渡者', '👻', 15680, 1, 'region_001', '华东区', true),
-  createMockEntry('f4', 'player_004', '月下独行者', '🌙', 12450, 2, 'region_001', '华东区', true),
-  createMockEntry('f6', 'player_006', '黄泉引路人', '🔥', 10890, 4, 'region_002', '华北区', true),
-  createMockEntry('f8', 'player_008', '三生石畔客', '🪨', 8760, 3, 'region_001', '华东区', true),
-  createMockEntry('f12', 'player_012', '牛头马面', '🐂', 5800, 5, 'region_002', '华北区', true),
-]
-
-export const mockRegionLeaderboards: Record<string, LeaderboardEntry[]> = {
-  region_001: [
-    mockLeaderboard[0],
-    mockLeaderboard[1],
-    mockLeaderboard[3],
-    mockLeaderboard[7],
-    mockLeaderboard[10],
-    mockLeaderboard[12],
-  ],
-  region_002: [
-    mockLeaderboard[2],
-    mockLeaderboard[5],
-    mockLeaderboard[11],
-    mockLeaderboard[13],
-  ],
-  region_003: [
-    mockLeaderboard[4],
-    mockLeaderboard[9],
-  ],
-  region_004: [
-    mockLeaderboard[6],
-    mockLeaderboard[13],
-  ],
-  region_005: [
-    mockLeaderboard[8],
-    mockLeaderboard[14],
-  ],
-}
-
 export function calculateTiedRanks(entries: LeaderboardEntry[]): LeaderboardEntry[] {
   const sorted = [...entries].sort((a, b) => b.score - a.score)
   const result: LeaderboardEntry[] = []
@@ -429,18 +629,30 @@ export function calculateTiedRanks(entries: LeaderboardEntry[]): LeaderboardEntr
   return result
 }
 
-export function getRegionLeaderboard(regionId: string): LeaderboardEntry[] {
-  return mockRegionLeaderboards[regionId] || []
-}
-
-export function getFriendLeaderboard(): LeaderboardEntry[] {
-  return [...mockFriendLeaderboard]
-}
-
 export function getRandomRegion(): Region {
   return regions[Math.floor(Math.random() * regions.length)]
 }
 
 export function getRegionById(id: string): Region | undefined {
   return regions.find((r) => r.id === id)
+}
+
+export function getRankRewardTier(rank: number, type: LeaderboardRewardType = 'global'): RankRewardTier | undefined {
+  const tiers = leaderboardRewardConfigs[type].tiers
+  return tiers.find((t) => {
+    if (t.maxRank !== undefined) {
+      return rank >= t.minRank && rank <= t.maxRank
+    }
+    return rank >= t.minRank
+  })
+}
+
+export function getRankRewardId(rank: number, type: LeaderboardRewardType = 'global'): string | null {
+  const tier = getRankRewardTier(rank, type)
+  return tier ? tier.rewardId : null
+}
+
+export function getRankTierName(rank: number, type: LeaderboardRewardType = 'global'): string | null {
+  const tier = getRankRewardTier(rank, type)
+  return tier ? tier.tierName : null
 }

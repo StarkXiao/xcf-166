@@ -77,6 +77,14 @@ export interface RankRewardTier {
   tierName: string
 }
 
+export type LeaderboardRewardType = 'global' | 'region' | 'friend'
+
+export interface LeaderboardRewardConfig {
+  type: LeaderboardRewardType
+  tiers: RankRewardTier[]
+  name: string
+}
+
 export interface SeasonSettlement {
   id: string
   seasonId: string
@@ -85,6 +93,10 @@ export interface SeasonSettlement {
   finalScore: number
   finalLevel: number
   rewardIds: string[]
+  regionRank: number
+  friendRank: number
+  regionRewardIds: string[]
+  friendRewardIds: string[]
   settledAt: number
   claimed: boolean
   claimedAt?: number
@@ -118,7 +130,7 @@ export interface RewardRecord {
   id: string
   playerSeasonId: string
   rewardId: string
-  source: 'level' | 'task' | 'rank'
+  source: 'level' | 'task' | 'rank' | 'region_rank' | 'friend_rank'
   claimedAt: number
 }
 
