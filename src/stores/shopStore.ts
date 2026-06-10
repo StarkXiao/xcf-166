@@ -355,6 +355,17 @@ export const useShopStore = defineStore('shop', () => {
       rarity: item.rarity
     })
 
+    try {
+      const actStore = (globalThis as any).__pinia_activityStore as any
+      if (actStore) {
+        const totalPurchases = Object.values(purchaseHistory.value).reduce((s, v) => s + (v || 0), 0)
+        actStore.onPlayerEvent('shop_purchase', {
+          shop_purchase_count: totalPurchases,
+          total_payment: characterStore.totalSpent?.money ?? 0,
+        })
+      }
+    } catch {}
+
     if (item.category === 'buff' && item.effect.type === 'buff') {
       applyItemEffect(item, quantity)
       const invItem = inventory.value.find(inv => inv.itemId === itemId)

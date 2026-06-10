@@ -85,6 +85,9 @@ import {
   Clock,
 } from 'lucide-vue-next'
 import { useActivityStore } from '@/stores/activityStore'
+import { useGameStore } from '@/stores/gameStore'
+import { useCharacterStore } from '@/stores/characterStore'
+import { useShopStore } from '@/stores/shopStore'
 
 const route = useRoute()
 const activityStore = useActivityStore()
@@ -126,6 +129,14 @@ const currentPageTitle = computed(() => {
 })
 
 onMounted(() => {
+  try {
+    const gameStore = useGameStore()
+    const charStore = useCharacterStore()
+    const shopStore = useShopStore()
+    activityStore.registerGameStores(gameStore, charStore, shopStore)
+    ;(globalThis as any).__pinia_activityStore = activityStore
+  } catch {}
+
   activityStore.initLifecycle()
 })
 

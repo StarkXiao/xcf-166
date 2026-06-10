@@ -378,6 +378,41 @@
                   placeholder="模拟VIP"
                 />
               </div>
+            </div>
+            <div class="flex items-end gap-3">
+              <div class="flex-1">
+                <label class="block text-xs text-gray-500 mb-1">登录天数</label>
+                <input
+                  v-model.number="validationLoginDays"
+                  type="number"
+                  class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-purple-500"
+                  placeholder="登录天数"
+                />
+              </div>
+              <div class="flex-1">
+                <label class="block text-xs text-gray-500 mb-1">订单数量</label>
+                <input
+                  v-model.number="validationOrderCount"
+                  type="number"
+                  class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-purple-500"
+                  placeholder="订单数量"
+                />
+              </div>
+              <div class="flex-1">
+                <label class="block text-xs text-gray-500 mb-1">累计付费</label>
+                <input
+                  v-model.number="validationTotalPayment"
+                  type="number"
+                  class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-purple-500"
+                  placeholder="累计付费"
+                />
+              </div>
+              <button
+                @click="fillFromCurrentPlayer"
+                class="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white text-sm rounded-lg transition-colors whitespace-nowrap"
+              >
+                当前玩家
+              </button>
               <button
                 @click="runValidation"
                 :disabled="!validationPlayerId"
@@ -838,6 +873,9 @@ const operatorLabels: Record<string, string> = {
 const validationPlayerId = ref('')
 const validationPlayerLevel = ref<number | undefined>(undefined)
 const validationVipLevel = ref<number | undefined>(undefined)
+const validationLoginDays = ref<number | undefined>(undefined)
+const validationOrderCount = ref<number | undefined>(undefined)
+const validationTotalPayment = ref<number | undefined>(undefined)
 const validationReport = ref<ConditionValidationReport | null>(null)
 
 const reissuePlayerId = ref('')
@@ -1021,6 +1059,16 @@ function manualUnlockStage(stageId: string) {
   activityStore.unlockStage(activity.value.id, stageId)
 }
 
+function fillFromCurrentPlayer() {
+  const snapshot = activityStore.getPlayerSnapshot('current_player')
+  validationPlayerId.value = 'current_player'
+  validationPlayerLevel.value = (snapshot.player_level as number) || undefined
+  validationVipLevel.value = (snapshot.player_vip as number) || undefined
+  validationLoginDays.value = (snapshot.login_days as number) || undefined
+  validationOrderCount.value = (snapshot.order_count as number) || undefined
+  validationTotalPayment.value = (snapshot.total_payment as number) || undefined
+}
+
 function runValidation() {
   if (!activity.value || !validationPlayerId.value) return
 
@@ -1030,6 +1078,15 @@ function runValidation() {
   }
   if (validationVipLevel.value !== undefined) {
     playerData.player_vip = validationVipLevel.value
+  }
+  if (validationLoginDays.value !== undefined) {
+    playerData.login_days = validationLoginDays.value
+  }
+  if (validationOrderCount.value !== undefined) {
+    playerData.order_count = validationOrderCount.value
+  }
+  if (validationTotalPayment.value !== undefined) {
+    playerData.total_payment = validationTotalPayment.value
   }
 
   validationReport.value = activityStore.validateConditions(

@@ -478,6 +478,14 @@ export const useCharacterStore = defineStore('character', () => {
         characterLevel: char.level,
         previousLevel
       })
+
+      try {
+        const actStore = (globalThis as any).__pinia_activityStore as any
+        if (actStore) actStore.onPlayerEvent('level_up', {
+          player_level: char.level,
+          player_vip: char.level,
+        })
+      } catch {}
     }
 
     return results

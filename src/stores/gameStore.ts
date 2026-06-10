@@ -90,6 +90,10 @@ export const useGameStore = defineStore('game', () => {
       const taskStore = useTaskStore()
       taskStore.onGameEvent('money_earn', amount)
     }
+    try {
+      const actStore = (globalThis as any).__pinia_activityStore as any
+      if (actStore) actStore.onPlayerEvent('money_change', { money: stats.value.money })
+    } catch {}
   }
 
   function addReputation(amount: number) {
@@ -148,6 +152,11 @@ export const useGameStore = defineStore('game', () => {
       achievementStore.trackBehavior('day_passed', { day: day.value, totalDays: day.value })
       const taskStore = useTaskStore()
       taskStore.onGameEvent('day_pass', 1)
+
+      try {
+        const actStore = (globalThis as any).__pinia_activityStore as any
+        if (actStore) actStore.onPlayerEvent('day_pass', { login_days: day.value })
+      } catch {}
     }
   }
 
@@ -173,6 +182,14 @@ export const useGameStore = defineStore('game', () => {
       relicCount: stats.value.totalRelicsProcessed,
       quality: orderQuality
     })
+
+    try {
+      const actStore = (globalThis as any).__pinia_activityStore as any
+      if (actStore) actStore.onPlayerEvent('order_complete', {
+        order_count: stats.value.totalOrdersCompleted,
+        total_relics: stats.value.totalRelicsProcessed,
+      })
+    } catch {}
   }
 
   function checkGameOver() {

@@ -1164,6 +1164,73 @@ export const useActivityStore = defineStore('activity', () => {
 
   let lifecycleTimer: ReturnType<typeof setInterval> | null = null
 
+  function resolveGameStores() {
+    try {
+      const gameStore = (globalThis as any).__pinia_gameStore as any
+      const charStore = (globalThis as any).__pinia_charStore as any
+      const shopStore = (globalThis as any).__pinia_shopStore as any
+      if (gameStore) return { gameStore, charStore, shopStore }
+    } catch {}
+    return null
+  }
+
+  function getPlayerSnapshot(playerId: string): Record<string, number | string | boolean> {
+    const snapshot: Record<string, number | string | boolean> = {}
+
+    const stores = resolveGameStores()
+    if (!stores) {
+      snapshot.player_level = 0
+      snapshot.player_vip = 0
+      snapshot.login_days = 1
+      snapshot.order_count = 0
+      snapshot.total_payment = 0
+      snapshot.first_login = false
+      return snapshot
+    }
+
+    const { gameStore, charStore, shopStore } = stores
+
+    const char = charStore?.activeCharacter
+    snapshot.player_level = char?.level ?? 0
+    snapshot.login_days = gameStore?.day ?? 1
+    snapshot.order_count = gameStore?.stats?.totalOrdersCompleted ?? 0
+    snapshot.total_payment = charStore?.totalSpent?.money ?? 0
+    snapshot.first_login = gameStore?.gameStarted ?? false
+
+    if (char) {
+      const findAttr = (type: string) => char.currentAttributes?.find((a: any) => a.type === type)
+      snapshot.player_vip = char.level
+      snapshot.attribute_efficiency = findAttr('efficiency')?.value ?? 0
+      snapshot.attribute_luck = findAttr('luck')?.value ?? 0
+      snapshot.attribute_money = findAttr('money')?.value ?? 0
+      snapshot.attribute_reputation = findAttr('reputation')?.value ?? 0
+      snapshot.attribute_sanity = findAttr('sanity')?.value ?? 0
+    } else {
+      snapshot.player_vip = 0
+    }
+
+    if (shopStore) {
+      const hist: Record<string, number> = shopStore.purchaseHistory ?? {}
+      const totalPurchases = Object.values(hist).reduce(
+        (s, v) => s + (v || 0), 0,
+      )
+      snapshot.shop_purchase_count = totalPurchases
+    }
+
+    snapshot.money = gameStore?.stats?.money ?? 0
+    snapshot.reputation = gameStore?.stats?.reputation ?? 0
+    snapshot.sanity = gameStore?.stats?.sanity ?? 0
+    snapshot.total_relics = gameStore?.stats?.totalRelicsProcessed ?? 0
+
+    return snapshot
+  }
+
+  function registerGameStores(gameStore: any, charStore: any, shopStore: any) {
+    (globalThis as any).__pinia_gameStore = gameStore
+    (globalThis as any).__pinia_charStore = charStore
+    (globalThis as any).__pinia_shopStore = shopStore
+  }
+
   function initLifecycle() {
     if (lifecycleTimer) return
 
@@ -1183,6 +1250,8 @@ export const useActivityStore = defineStore('activity', () => {
 
   function runLifecycleTick() {
     const now = Date.now()
+    const playerData = getPlayerSnapshot('current_player')
+
     const activitiesToCheck = activities.value.filter(
       a => a.status === 'active' || a.status === 'paused',
     )
@@ -1193,13 +1262,37 @@ export const useActivityStore = defineStore('activity', () => {
         continue
       }
 
-      checkStageUnlocks(activity.id)
+      checkStageUnlocks(activity.id, playerData)
     }
 
     for (const activity of activities.value) {
       if (activity.status === 'ended' && !activity.archiveStatus) {
         archiveActivity(activity.id, 'system')
       }
+    }
+  }
+
+  function onPlayerEvent(eventType: string, extraData: Record<string, any> = {}) {
+    const playerData = getPlayerSnapshot('current_player')
+
+    for (const key of Object.keys(extraData)) {
+      playerData[key] = extraData[key]
+    }
+
+    const activeIds = activities.value
+      .filter(a => a.status === 'active')
+      .map(a => a.id)
+
+    for (const id of activeIds) {
+      const activityStages = stages.value[id]
+      if (!activityStages) continue
+
+      const hasConditionStages = activityStages.some(
+        s => !s.isUnlocked && s.unlockType === 'condition',
+      )
+      if (!hasConditionStages) continue
+
+      checkStageUnlocks(id, playerData)
     }
   }
 
@@ -1276,6 +1369,9 @@ export const useActivityStore = defineStore('activity', () => {
     exportArchive,
     initLifecycle,
     stopLifecycle,
+    getPlayerSnapshot,
+    registerGameStores,
+    onPlayerEvent,
     clearStorage,
   }
 })
