@@ -46,10 +46,10 @@ function isExpanded(orderId: string): boolean {
 }
 
 function handleRollback(orderId: string) {
-  if (confirm('确定要回滚该订单吗？这将返还金币和声望，并从背包中移除物品。')) {
+  if (confirm('确定要回滚该订单吗？\n\n回滚将执行以下操作：\n1. 返还已花费的金币和声望\n2. 从背包中移除获得的物品\n3. 撤销已生效的增益效果\n4. 恢复限购计数\n5. 恢复商品库存')) {
     const record = shopStore.rollbackRecords.find(r => r.orderId === orderId)
     if (record) {
-      const result = shopStore.executeRollback(record.id)
+      const result = shopStore.executeRollback(record.id, '用户手动回滚')
       alert(result.message)
     } else {
       alert('未找到回滚记录')
@@ -113,7 +113,7 @@ const statusColor: Record<string, string> = {
           </div>
           <div class="flex items-center gap-2">
             <button
-              v-if="order.status === 'completed' && order.isGiftPack && order.unpackedItems"
+              v-if="(order.status === 'completed' || order.status === 'rollback') && order.isGiftPack && order.unpackedItems"
               @click="toggleExpand(order.id)"
               class="p-1 hover:bg-gray-700 rounded transition-colors text-gray-400"
             >
@@ -164,7 +164,7 @@ const statusColor: Record<string, string> = {
 
         <Transition name="fade">
           <div v-if="isExpanded(order.id) && order.isGiftPack && order.unpackedItems" class="mt-3 pt-3 border-t border-gray-700">
-            <div class="text-xs text-gray-400 mb-2">拆封获得：</div>
+            <div class="text-xs text-gray-400 mb-2">{{ order.status === 'rollback' ? '曾拆封获得（已回滚）：' : '拆封获得：' }}</div>
             <div class="flex flex-wrap gap-2">
               <div
                 v-for="item in order.unpackedItems"

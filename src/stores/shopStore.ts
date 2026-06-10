@@ -16,7 +16,9 @@ import type {
   PurchaseLimitType,
   RollbackRecord,
   AssetChange,
-  RollbackStatus
+  RollbackStatus,
+  AppliedBuffSnapshot,
+  InstantEffectSnapshot
 } from '../types/shop'
 import { getInitialShopItems, getInitialDiscounts } from '../game/data/shopItems'
 import { getItemDef } from '../game/data/itemCatalog'
@@ -115,7 +117,9 @@ export const useShopStore = defineStore('shop', () => {
   })
 
   const completedOrders = computed(() => {
-    return orders.value.filter(o => o.status === 'completed').sort((a, b) => b.createdAt - a.createdAt)
+    return orders.value
+      .filter(o => o.status === 'completed' || o.status === 'rollback')
+      .sort((a, b) => b.createdAt - a.createdAt)
   })
 
   function getItemDiscount(itemId: string, category?: ItemCategory): DiscountConfig | null {
@@ -333,7 +337,13 @@ export const useShopStore = defineStore('shop', () => {
     return unpacked
   }
 
-  function addUnpackedItemsToInventory(unpackedItems: UnpackedItem[]): void {
+  function addUnpackedItemsToInventory(unpackedItems: UnpackedItem[]): {
+    buffSnapshots: AppliedBuffSnapshot[]
+    instantEffectSnapshots: InstantEffectSnapshot[]
+  } {
+    const buffSnapshots: AppliedBuffSnapshot[] = []
+    const instantEffectSnapshots: InstantEffectSnapshot[] = []
+
     for (const unpacked of unpackedItems) {
       const existing = inventory.value.find(inv => inv.itemId === unpacked.itemId)
       if (existing) {
@@ -348,7 +358,12 @@ export const useShopStore = defineStore('shop', () => {
 
       const shopItem = items.value.find(i => i.id === unpacked.itemId)
       if (shopItem && shopItem.category === 'buff' && shopItem.effect.type === 'buff') {
+        const prevBuffCount = characterStore.activeBuffs.length
         applyItemEffect(shopItem, unpacked.quantity)
+        const newBuffs = characterStore.activeBuffs.slice(prevBuffCount)
+        for (const b of newBuffs) {
+          buffSnapshots.push({ buffId: b.id, sourceSkillId: b.sourceSkillId })
+        }
         const invItem = inventory.value.find(inv => inv.itemId === unpacked.itemId)
         if (invItem) {
           invItem.quantity -= unpacked.quantity
@@ -357,23 +372,45 @@ export const useShopStore = defineStore('shop', () => {
           }
         }
       }
+
+      if (shopItem && shopItem.effect.type === 'instant') {
+        const eff = shopItem.effect
+        if (eff.target === 'sanity' || eff.target === 'money' || eff.target === 'reputation') {
+          instantEffectSnapshots.push({
+            target: eff.target,
+            value: eff.value * unpacked.quantity
+          })
+        }
+        if (eff.target === 'buff' && eff.special === 'anomaly_immunity_one_time') {
+          const prevBuffCount = characterStore.activeBuffs.length
+          applyItemEffect(shopItem, unpacked.quantity)
+          const newBuffs = characterStore.activeBuffs.slice(prevBuffCount)
+          for (const b of newBuffs) {
+            buffSnapshots.push({ buffId: b.id, sourceSkillId: b.sourceSkillId })
+          }
+        }
+      }
     }
+
+    return { buffSnapshots, instantEffectSnapshots }
   }
 
-  function createRollbackRecord(orderId: string, changes: AssetChange[], reason?: string): RollbackRecord {
+  function createRollbackRecord(orderId: string, changes: AssetChange[], reason?: string, orderItemId?: string, orderQuantity?: number): RollbackRecord {
     const record: RollbackRecord = {
       id: `rollback_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       orderId,
       changes,
       status: 'pending',
       createdAt: Date.now(),
-      reason
+      reason,
+      orderItemId,
+      orderQuantity
     }
     rollbackRecords.value.push(record)
     return record
   }
 
-  function executeRollback(rollbackId: string): { success: boolean; message: string } {
+  function executeRollback(rollbackId: string, reason?: string): { success: boolean; message: string } {
     const record = rollbackRecords.value.find(r => r.id === rollbackId)
     if (!record) {
       return { success: false, message: '回滚记录不存在' }
@@ -389,11 +426,58 @@ export const useShopStore = defineStore('shop', () => {
         } else if (change.type === 'reputation') {
           gameStore.addReputation(change.amount)
         } else if (change.type === 'inventory') {
-          const inv = inventory.value.find(i => i.itemId === change.itemId)
-          if (inv) {
-            inv.quantity = Math.max(0, inv.quantity - change.amount)
-            if (inv.quantity <= 0) {
-              inventory.value = inventory.value.filter(i => i.itemId !== change.itemId)
+          if (change.itemId) {
+            const inv = inventory.value.find(i => i.itemId === change.itemId)
+            if (inv) {
+              inv.quantity = Math.max(0, inv.quantity - change.amount)
+              if (inv.quantity <= 0) {
+                inventory.value = inventory.value.filter(i => i.itemId !== change.itemId)
+              }
+            }
+          }
+        } else if (change.type === 'buff') {
+          if (change.buffSnapshots) {
+            for (const bs of change.buffSnapshots) {
+              const existingBuff = characterStore.activeBuffs.find(b => b.id === bs.buffId)
+              if (existingBuff) {
+                characterStore.removeBuff(bs.buffId)
+              } else {
+                const sourceBuffs = characterStore.activeBuffs.filter(b => b.sourceSkillId === bs.sourceSkillId)
+                for (const sb of sourceBuffs) {
+                  characterStore.removeBuff(sb.id)
+                }
+              }
+            }
+          }
+        } else if (change.type === 'instant_effect') {
+          if (change.instantEffectSnapshots) {
+            for (const eff of change.instantEffectSnapshots) {
+              if (eff.target === 'sanity') {
+                gameStore.addSanity(-eff.value)
+              } else if (eff.target === 'money') {
+                gameStore.addMoney(-eff.value)
+              } else if (eff.target === 'reputation') {
+                gameStore.addReputation(-eff.value)
+              }
+            }
+          }
+        } else if (change.type === 'limit_count') {
+          if (change.limitSnapshot) {
+            const snap = change.limitSnapshot
+            if (purchaseHistory.value[snap.itemId] !== undefined) {
+              purchaseHistory.value[snap.itemId] = Math.max(0, purchaseHistory.value[snap.itemId] - snap.quantity)
+            }
+            const dailyKey = `${snap.itemId}_${snap.dateKey}`
+            if (dailyPurchaseHistory.value[dailyKey]) {
+              dailyPurchaseHistory.value[dailyKey].count = Math.max(0, dailyPurchaseHistory.value[dailyKey].count - snap.quantity)
+            }
+            const weeklyKey = `${snap.itemId}_${snap.weekKey}`
+            if (weeklyPurchaseHistory.value[weeklyKey]) {
+              weeklyPurchaseHistory.value[weeklyKey].count = Math.max(0, weeklyPurchaseHistory.value[weeklyKey].count - snap.quantity)
+            }
+            const monthlyKey = `${snap.itemId}_${snap.monthKey}`
+            if (monthlyPurchaseHistory.value[monthlyKey]) {
+              monthlyPurchaseHistory.value[monthlyKey].count = Math.max(0, monthlyPurchaseHistory.value[monthlyKey].count - snap.quantity)
             }
           }
         }
@@ -402,7 +486,8 @@ export const useShopStore = defineStore('shop', () => {
       const order = orders.value.find(o => o.id === record.orderId)
       if (order) {
         order.status = 'rollback'
-        order.rollbackReason = record.reason
+        order.rollbackReason = reason || record.reason || '用户回滚'
+        order.refundedAt = Date.now()
         if (order.itemId) {
           const item = items.value.find(i => i.id === order.itemId)
           if (item) {
@@ -413,6 +498,9 @@ export const useShopStore = defineStore('shop', () => {
 
       record.status = 'success'
       record.executedAt = Date.now()
+      if (reason) {
+        record.reason = reason
+      }
       return { success: true, message: '资产回滚成功' }
     } catch (e: any) {
       record.status = 'failed'
@@ -558,6 +646,8 @@ export const useShopStore = defineStore('shop', () => {
     }
 
     const assetChanges: AssetChange[] = []
+    const allBuffSnapshots: AppliedBuffSnapshot[] = []
+    const allInstantEffectSnapshots: InstantEffectSnapshot[] = []
 
     gameStore.addMoney(-totalPrice.money)
     assetChanges.push({ type: 'money', target: 'player', amount: totalPrice.money })
@@ -568,7 +658,23 @@ export const useShopStore = defineStore('shop', () => {
 
     item.stock -= quantity
 
+    const dateKey = getDateKey()
+    const weekKey = getWeekKey()
+    const monthKey = getMonthKey()
+
     recordLimitPurchase(itemId, quantity)
+    assetChanges.push({
+      type: 'limit_count',
+      target: 'purchase_limits',
+      amount: quantity,
+      limitSnapshot: {
+        itemId,
+        quantity,
+        dateKey,
+        weekKey,
+        monthKey
+      }
+    })
 
     const orderId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     let unpackedItems: UnpackedItem[] | undefined
@@ -578,7 +684,6 @@ export const useShopStore = defineStore('shop', () => {
       unpackedItems = unpackGiftPack(item.giftPack, quantity)
       if (item.giftPack.autoUnpack) {
         for (const unpacked of unpackedItems) {
-          const existingInv = inventory.value.find(inv => inv.itemId === unpacked.itemId)
           assetChanges.push({
             type: 'inventory',
             target: 'player',
@@ -586,7 +691,9 @@ export const useShopStore = defineStore('shop', () => {
             itemId: unpacked.itemId
           })
         }
-        addUnpackedItemsToInventory(unpackedItems)
+        const unpackResult = addUnpackedItemsToInventory(unpackedItems)
+        allBuffSnapshots.push(...unpackResult.buffSnapshots)
+        allInstantEffectSnapshots.push(...unpackResult.instantEffectSnapshots)
       } else {
         const existingInventory = inventory.value.find(inv => inv.itemId === itemId)
         if (existingInventory) {
@@ -624,6 +731,58 @@ export const useShopStore = defineStore('shop', () => {
       })
     }
 
+    if (!isGiftPack && item.category === 'buff' && item.effect.type === 'buff') {
+      const prevBuffCount = characterStore.activeBuffs.length
+      applyItemEffect(item, quantity)
+      const newBuffs = characterStore.activeBuffs.slice(prevBuffCount)
+      for (const b of newBuffs) {
+        allBuffSnapshots.push({ buffId: b.id, sourceSkillId: b.sourceSkillId })
+      }
+      const invItem = inventory.value.find(inv => inv.itemId === itemId)
+      if (invItem) {
+        invItem.quantity -= quantity
+        if (invItem.quantity <= 0) {
+          inventory.value = inventory.value.filter(inv => inv.itemId !== itemId)
+        }
+      }
+    }
+
+    if (!isGiftPack && item.effect.type === 'instant') {
+      const eff = item.effect
+      if (eff.target === 'sanity' || eff.target === 'money' || eff.target === 'reputation') {
+        allInstantEffectSnapshots.push({
+          target: eff.target,
+          value: eff.value * quantity
+        })
+      }
+      if (eff.target === 'buff' && eff.special === 'anomaly_immunity_one_time') {
+        const prevBuffCount = characterStore.activeBuffs.length
+        applyItemEffect(item, quantity)
+        const newBuffs = characterStore.activeBuffs.slice(prevBuffCount)
+        for (const b of newBuffs) {
+          allBuffSnapshots.push({ buffId: b.id, sourceSkillId: b.sourceSkillId })
+        }
+      }
+    }
+
+    if (allBuffSnapshots.length > 0) {
+      assetChanges.push({
+        type: 'buff',
+        target: 'character',
+        amount: allBuffSnapshots.length,
+        buffSnapshots: allBuffSnapshots
+      })
+    }
+
+    if (allInstantEffectSnapshots.length > 0) {
+      assetChanges.push({
+        type: 'instant_effect',
+        target: 'player',
+        amount: allInstantEffectSnapshots.reduce((s, e) => s + e.value, 0),
+        instantEffectSnapshots: allInstantEffectSnapshots
+      })
+    }
+
     const order: ShopOrder = {
       id: orderId,
       itemId,
@@ -640,7 +799,7 @@ export const useShopStore = defineStore('shop', () => {
     }
     orders.value.push(order)
 
-    createRollbackRecord(orderId, assetChanges)
+    createRollbackRecord(orderId, assetChanges, undefined, itemId, quantity)
 
     achievementStore.trackBehavior('shop_purchase', {
       itemId,
@@ -662,23 +821,6 @@ export const useShopStore = defineStore('shop', () => {
         })
       }
     } catch {}
-
-    if (!isGiftPack && item.category === 'buff' && item.effect.type === 'buff') {
-      applyItemEffect(item, quantity)
-      const invItem = inventory.value.find(inv => inv.itemId === itemId)
-      if (invItem) {
-        invItem.quantity -= quantity
-        if (invItem.quantity <= 0) {
-          inventory.value = inventory.value.filter(inv => inv.itemId !== itemId)
-        }
-      }
-      return {
-        success: true,
-        message: `成功购买并使用 ${item.name} x${quantity}！`,
-        order,
-        inventoryItem: inventory.value.find(inv => inv.itemId === itemId)
-      }
-    }
 
     if (isGiftPack && unpackedItems) {
       const names = unpackedItems.map(u => `${u.itemName}x${u.quantity}`).join('、')

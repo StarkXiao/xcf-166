@@ -79,11 +79,32 @@ export interface GiftPackConfig {
   previewCount?: number
 }
 
+export interface AppliedBuffSnapshot {
+  buffId: string
+  sourceSkillId: string
+}
+
+export interface InstantEffectSnapshot {
+  target: 'sanity' | 'money' | 'reputation'
+  value: number
+}
+
+export interface LimitPurchaseSnapshot {
+  itemId: string
+  quantity: number
+  dateKey: string
+  weekKey: string
+  monthKey: string
+}
+
 export interface AssetChange {
-  type: 'money' | 'reputation' | 'inventory' | 'buff'
+  type: 'money' | 'reputation' | 'inventory' | 'buff' | 'instant_effect' | 'limit_count'
   target: string
   amount: number
   itemId?: string
+  buffSnapshots?: AppliedBuffSnapshot[]
+  instantEffectSnapshots?: InstantEffectSnapshot[]
+  limitSnapshot?: LimitPurchaseSnapshot
 }
 
 export interface RollbackRecord {
@@ -94,6 +115,8 @@ export interface RollbackRecord {
   createdAt: number
   executedAt?: number
   reason?: string
+  orderItemId?: string
+  orderQuantity?: number
 }
 
 export interface InventoryItem {
