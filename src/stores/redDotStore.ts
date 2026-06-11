@@ -84,6 +84,38 @@ export const useRedDotStore = defineStore('redDot', () => {
     { deep: true }
   )
 
+  const generatedRawCounts = computed<Record<string, number>>(() => ({
+    'gen_achievement_reward': achievementStore.unclaimedCount,
+    'gen_achievement_notification': achievementStore.unreadNotificationCount,
+    'gen_friend_invite': friendStore.pendingInviteCount,
+    'gen_friend_notification': friendStore.unreadNotificationCount,
+    'gen_friend_help': friendStore.pendingHelpRequestCount,
+    'gen_friend_task_reward': friendStore.unclaimedRewardCount,
+    'gen_mail_unread': mailStore.unreadCount,
+    'gen_mail_attachment': mailStore.unclaimedAttachmentCount,
+    'gen_season_task': (seasonStore as any).unclaimedCount || (seasonStore as any).unclaimedRewardCount || 0,
+    'gen_shop_new': (shopStore as any).newArrivalCount || (shopStore as any).activeDiscounts?.length || 0,
+  }))
+
+  watch(
+    generatedRawCounts,
+    (newCounts, oldCounts) => {
+      if (!oldCounts) return
+      const idsToClear: string[] = []
+      for (const [id, count] of Object.entries(newCounts)) {
+        if (count === 0 && oldCounts[id] > 0 && dismissedSnapshots.value[id] !== undefined) {
+          idsToClear.push(id)
+        }
+      }
+      if (idsToClear.length > 0) {
+        const newSnapshots = { ...dismissedSnapshots.value }
+        idsToClear.forEach(id => delete newSnapshots[id])
+        dismissedSnapshots.value = newSnapshots
+      }
+    },
+    { deep: true }
+  )
+
   function isDismissed(itemId: string, currentCount: number): boolean {
     const snapshot = dismissedSnapshots.value[itemId]
     if (snapshot === undefined) return false
@@ -492,6 +524,21 @@ export const useRedDotStore = defineStore('redDot', () => {
     }
   }
 
+  function dismissCategory(category: RedDotCategory) {
+    const items = allItems.value.filter(i => i.category === category)
+    if (items.length === 0) return
+
+    if (category === 'custom') {
+      items.forEach(item => addCustomRead(item.id))
+    } else {
+      const newSnapshots = { ...dismissedSnapshots.value }
+      items.forEach(item => {
+        newSnapshots[item.id] = item.count
+      })
+      dismissedSnapshots.value = newSnapshots
+    }
+  }
+
   function navigateToItem(itemId: string) {
     const item = allItems.value.find(i => i.id === itemId)
     if (!item || !item.routePath) return false
@@ -582,6 +629,7 @@ export const useRedDotStore = defineStore('redDot', () => {
     markAllAsRead,
     markCategoryAsRead,
     dismissItem,
+    dismissCategory,
     navigateToItem,
     getCategoryCount,
     getCategoryLabel,

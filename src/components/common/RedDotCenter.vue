@@ -15,6 +15,7 @@ import {
   Bell,
   ChevronRight,
   Eye,
+  EyeOff,
   Trash2,
   AlertCircle,
   AlertTriangle,
@@ -70,6 +71,13 @@ const canMarkCategoryAsRead = computed(() => {
   return RED_DOT_READABLE_CATEGORIES.has(filterCategory.value)
 })
 
+const canDismissCategory = computed(() => {
+  if (filterCategory.value === 'all') return false
+  if (filterCategory.value === 'custom') return false
+  return !RED_DOT_READABLE_CATEGORIES.has(filterCategory.value)
+    && redDotStore.allItems.some(i => i.category === filterCategory.value)
+})
+
 function isItemReadable(category: RedDotCategory): boolean {
   return RED_DOT_READABLE_CATEGORIES.has(category)
 }
@@ -117,6 +125,12 @@ function handleMarkCategoryAsRead() {
     handleMarkAllAsRead()
   } else {
     redDotStore.markCategoryAsRead(filterCategory.value)
+  }
+}
+
+function handleDismissCategory() {
+  if (filterCategory.value !== 'all' && filterCategory.value !== 'custom') {
+    redDotStore.dismissCategory(filterCategory.value)
   }
 }
 
@@ -195,6 +209,14 @@ function handleDismiss(itemId: string) {
             >
               <CheckCheck class="w-3.5 h-3.5" />
               {{ filterCategory === 'all' ? '全部已读' : '分类已读' }}
+            </button>
+            <button
+              v-if="canDismissCategory"
+              @click="handleDismissCategory"
+              class="flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-400 hover:text-orange-400 hover:bg-gray-700 transition-colors"
+            >
+              <EyeOff class="w-3.5 h-3.5" />
+              全部忽略
             </button>
           </div>
         </div>
