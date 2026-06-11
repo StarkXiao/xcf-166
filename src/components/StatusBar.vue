@@ -5,13 +5,16 @@ import { useGameStore } from '@/stores/gameStore'
 import { useOrderStore } from '@/stores/orderStore'
 import { useEventStore } from '@/stores/eventStore'
 import { useCharacterStore } from '@/stores/characterStore'
+import { useSearchStore } from '@/stores/searchStore'
 import { audioManager } from '@/game/audio'
+import { Search } from 'lucide-vue-next'
 
 const router = useRouter()
 const gameStore = useGameStore()
 const orderStore = useOrderStore()
 const eventStore = useEventStore()
 const characterStore = useCharacterStore()
+const searchStore = useSearchStore()
 
 const isMuted = ref(false)
 const showSaveMenu = ref(false)
@@ -185,6 +188,16 @@ const phaseButtonText = () => {
         >
           {{ phaseButtonText() }}
         </button>
+
+        <div class="relative">
+          <button
+            @click="searchStore.openSearch"
+            class="p-2 bg-gray-800 hover:bg-gray-700 rounded transition-colors"
+            title="全局搜索 (Ctrl+K)"
+          >
+            <Search class="w-4 h-4 text-gray-400" />
+          </button>
+        </div>
 
         <div class="relative">
           <button

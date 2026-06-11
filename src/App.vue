@@ -8,6 +8,7 @@ import { useGameStore } from '@/stores/gameStore'
 import { useFriendStore } from '@/stores/friendStore'
 import { useMailStore } from '@/stores/mailStore'
 import { useOfflineStore } from '@/stores/offlineStore'
+import { useSearchStore } from '@/stores/searchStore'
 import { useRedDot } from '@/composables/useRedDot'
 import AchievementUnlockPopup from '@/components/achievement/AchievementUnlockPopup.vue'
 import NotificationCenter from '@/components/achievement/NotificationCenter.vue'
@@ -16,7 +17,8 @@ import FriendEntryCard from '@/components/friend/FriendEntryCard.vue'
 import TutorialGuide from '@/components/tutorial/TutorialGuide.vue'
 import RedDotBadge from '@/components/common/RedDotBadge.vue'
 import RedDotCenter from '@/components/common/RedDotCenter.vue'
-import { Bell, Trophy, Store, HelpCircle, Heart, Users, Mail, BarChart3, Dot } from 'lucide-vue-next'
+import GlobalSearchDialog from '@/components/common/GlobalSearchDialog.vue'
+import { Bell, Trophy, Store, HelpCircle, Heart, Users, Mail, BarChart3, Dot, Search } from 'lucide-vue-next'
 import { useRouter, useRoute } from 'vue-router'
 
 const achievementStore = useAchievementStore()
@@ -27,6 +29,7 @@ const gameStore = useGameStore()
 const friendStore = useFriendStore()
 const mailStore = useMailStore()
 const offlineStore = useOfflineStore()
+const searchStore = useSearchStore()
 const router = useRouter()
 const route = useRoute()
 
@@ -99,10 +102,12 @@ onMounted(() => {
   }
 
   window.addEventListener('beforeunload', handleBeforeUnload)
+  window.addEventListener('keydown', handleGlobalKeydown)
 })
 
 onUnmounted(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
+  window.removeEventListener('keydown', handleGlobalKeydown)
 })
 
 function handleBeforeUnload() {
@@ -163,6 +168,13 @@ function toggleFriendNotificationCenter() {
 function toggleRedDotCenter() {
   showRedDotCenter.value = !showRedDotCenter.value
 }
+
+function handleGlobalKeydown(e: KeyboardEvent) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault()
+    searchStore.toggleSearch()
+  }
+}
 </script>
 
 <template>
@@ -171,6 +183,14 @@ function toggleRedDotCenter() {
       v-if="showNav"
       class="fixed top-4 right-4 z-40 flex items-center gap-3"
     >
+      <button
+        @click="searchStore.openSearch"
+        class="relative p-3 bg-gray-900/90 backdrop-blur-sm rounded-xl border border-gray-700 hover:bg-gray-800 transition-colors group"
+        title="全局搜索 (Ctrl+K)"
+      >
+        <Search class="w-5 h-5 text-gray-400 group-hover:text-white" />
+      </button>
+
       <button
         @click="goToShop"
         class="shop-entry-btn relative p-3 bg-gray-900/90 backdrop-blur-sm rounded-xl border border-gray-700 hover:bg-gray-800 transition-colors group"
@@ -320,6 +340,8 @@ function toggleRedDotCenter() {
     <TutorialGuide ref="tutorialGuideRef" />
 
     <FriendEntryCard v-if="showFriendEntry" />
+
+    <GlobalSearchDialog />
 
     <button
       v-if="!tutorialStore.isCompleted && !tutorialStore.state.isActive"
