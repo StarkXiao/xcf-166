@@ -27,6 +27,7 @@ import {
 const props = defineProps<{
   task: SeasonTask
   progress?: TaskProgress
+  highlighted?: boolean
 }>()
 
 const seasonStore = useSeasonStore()
@@ -108,11 +109,13 @@ function formatNumber(num: number): string {
 
 <template>
   <div
+    :data-task-id="task.id"
     class="task-card relative p-5 rounded-2xl transition-all duration-500"
     :class="{
       'bg-gradient-to-r from-green-900/30 to-emerald-900/20 border-2 border-green-500/40': isCompleted && !isClaimed,
       'bg-gray-800/30 border border-gray-700/50 opacity-60': isClaimed,
       'bg-gray-900/60 border border-gray-800 hover:border-purple-500/30': !isCompleted,
+      'ring-4 ring-amber-400 ring-opacity-75 animate-pulse scale-[1.01]': highlighted
     }"
   >
     <div class="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">

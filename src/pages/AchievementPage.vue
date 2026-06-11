@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useAchievementStore } from '@/stores/achievementStore'
 import { useSeasonStore } from '@/stores/seasonStore'
 import { useCharacterStore } from '@/stores/characterStore'
@@ -24,6 +24,7 @@ import {
 } from 'lucide-vue-next'
 
 const router = useRouter()
+const route = useRoute()
 const achievementStore = useAchievementStore()
 const seasonStore = useSeasonStore()
 const characterStore = useCharacterStore()
@@ -31,6 +32,8 @@ const characterStore = useCharacterStore()
 const activeTab = ref<AchievementCategory | 'all'>('all')
 const showClaimAnimation = ref(false)
 const claimMessage = ref('')
+const highlightedAchievementId = ref<string | null>(null)
+const achievementCardsContainerRef = ref<HTMLElement | null>(null)
 
 const tabs = [
   { id: 'all', name: '全部', icon: Trophy },
@@ -121,6 +124,35 @@ onMounted(() => {
   seasonStore.initSeason()
   achievementStore.initAchievements(characterStore.activeCharacter?.id || 'player_local')
   achievementStore.resyncProgress()
+  applyRouteParams()
+})
+
+function applyRouteParams() {
+  const category = route.query.category as string
+  const id = route.query.id as string
+
+  if (category && ['gameplay', 'collection', 'seasonal', 'social', 'all'].includes(category)) {
+    activeTab.value = category as AchievementCategory | 'all'
+  }
+
+  if (id) {
+    nextTick(() => {
+      highlightedAchievementId.value = id
+      setTimeout(() => {
+        const el = document.querySelector(`[data-achievement-id="${id}"]`)
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+      }, 200)
+      setTimeout(() => {
+        highlightedAchievementId.value = null
+      }, 3000)
+    })
+  }
+}
+
+watch(() => route.query, () => {
+  applyRouteParams()
 })
 </script>
 
@@ -352,13 +384,14 @@ onMounted(() => {
           </button>
         </div>
 
-        <div class="p-6">
+          <div ref="achievementCardsContainerRef" class="p-6">
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <AchievementCard
               v-for="achievement in filteredAchievements"
               :key="achievement.id"
               :achievement="achievement"
               :player-achievement="achievementStore.getPlayerAchievement(achievement.id)"
+              :highlighted="highlightedAchievementId === achievement.id"
               @claim="handleClaim"
             />
           </div>

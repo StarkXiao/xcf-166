@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useTaskStore } from '@/stores/taskStore'
 import { getGrowthTasksByCategory } from '@/game/data/growthTasks'
 import type { GrowthTaskCategory, GrowthTask } from '@/types/task'
@@ -15,6 +15,10 @@ import {
   Lock,
   Unlock,
 } from 'lucide-vue-next'
+
+const props = defineProps<{
+  highlightedTaskId?: string | null
+}>()
 
 const taskStore = useTaskStore()
 const isClaiming = ref<string | null>(null)
@@ -170,6 +174,24 @@ async function handleClaim(taskId: string) {
   taskStore.claimGrowthTask(taskId)
   isClaiming.value = null
 }
+
+watch(() => props.highlightedTaskId, (id) => {
+  if (!id) return
+  for (const cat of categories) {
+    const tasks = getGrowthTasksByCategory(cat.id)
+    const found = tasks.find(t => t.id === id)
+    if (found) {
+      activeCategory.value = cat.id
+      nextTick(() => {
+        setTimeout(() => {
+          const el = document.querySelector(`[data-task-id="${id}"]`)
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }, 300)
+      })
+      break
+    }
+  }
+}, { immediate: true })
 </script>
 
 <template>
@@ -218,6 +240,7 @@ async function handleClaim(taskId: string) {
         <div
           v-for="task in filteredTasks"
           :key="task.id"
+          :data-task-id="task.id"
           class="growth-card relative p-5 rounded-2xl transition-all duration-500"
           :class="{
             'opacity-50': isLocked(task),
@@ -225,6 +248,7 @@ async function handleClaim(taskId: string) {
             'bg-gray-800/30 border border-gray-700/50 opacity-60': getProgress(task.id)?.claimed,
             'bg-gray-900/60 border border-gray-800 hover:border-purple-500/30': !getProgress(task.id)?.completed && !isLocked(task),
             'bg-gray-900/40 border border-gray-800': isLocked(task),
+            'ring-4 ring-amber-400 ring-opacity-75 animate-pulse scale-[1.01]': highlightedTaskId === task.id
           }"
         >
           <div v-if="isLocked(task)" class="absolute inset-0 rounded-2xl bg-gray-900/50 z-20 flex items-center justify-center">

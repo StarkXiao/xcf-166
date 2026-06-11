@@ -5,6 +5,10 @@ import { dungeons } from '@/game/data/dungeons'
 import type { Dungeon } from '@/types/dungeon'
 import { Swords, Lock, Star, ChevronRight, Trophy, Clock } from 'lucide-vue-next'
 
+const props = defineProps<{
+  highlightedDungeonId?: string | null
+}>()
+
 const emit = defineEmits<{
   (e: 'select-dungeon', dungeonId: string): void
 }>()
@@ -67,13 +71,15 @@ function handleClick(dungeonId: string) {
       <div
         v-for="item in dungeonList"
         :key="item.dungeon.id"
+        :data-dungeon-id="item.dungeon.id"
         @click="item.isUnlocked && handleClick(item.dungeon.id)"
         class="dungeon-card group relative overflow-hidden rounded-2xl border-2 transition-all duration-500"
         :class="[
           item.isUnlocked
             ? `${difficultyConfig[item.dungeon.difficulty].borderColor} bg-gray-900/80 cursor-pointer hover:scale-[1.02]`
             : 'border-gray-700/50 bg-gray-900/40 cursor-not-allowed opacity-50',
-          item.isUnlocked ? `hover:shadow-lg ${difficultyConfig[item.dungeon.difficulty].glow}` : ''
+          item.isUnlocked ? `hover:shadow-lg ${difficultyConfig[item.dungeon.difficulty].glow}` : '',
+          highlightedDungeonId === item.dungeon.id ? 'ring-4 ring-amber-400 ring-opacity-75 animate-pulse scale-[1.02]' : ''
         ]"
       >
         <div class="absolute inset-0 bg-gradient-to-br" :class="item.dungeon.background"></div>

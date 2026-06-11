@@ -24,6 +24,7 @@ const selectedStageId = ref<string | null>(null)
 const isRetrying = ref(false)
 const lastBattleRecord = ref<BattleRecord | null>(null)
 const lastBattleRewards = ref<BattleReward[]>([])
+const highlightedDungeonId = ref<string | null>(null)
 
 const tabs = [
   { id: 'list' as const, name: '副本列表', icon: Map },
@@ -40,6 +41,18 @@ onMounted(() => {
     selectedDungeonId.value = dungeon
     viewMode.value = stage ? 'battle' : 'stages'
     selectedStageId.value = stage || null
+    nextTick(() => {
+      highlightedDungeonId.value = dungeon
+      setTimeout(() => {
+        const el = document.querySelector(`[data-dungeon-id="${dungeon}"]`)
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+      }, 200)
+      setTimeout(() => {
+        highlightedDungeonId.value = null
+      }, 3000)
+    })
   }
 })
 
@@ -167,7 +180,10 @@ function goBack() {
 
       <Transition name="fade" mode="out-in">
         <div v-if="viewMode === 'list'" key="list">
-          <DungeonList @select-dungeon="handleSelectDungeon" />
+          <DungeonList
+            :highlighted-dungeon-id="highlightedDungeonId"
+            @select-dungeon="handleSelectDungeon"
+          />
         </div>
 
         <div v-else-if="viewMode === 'stages' && selectedDungeonId" key="stages">

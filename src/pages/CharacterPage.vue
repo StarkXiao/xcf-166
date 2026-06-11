@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useCharacterStore } from '@/stores/characterStore'
 import { useGameStore } from '@/stores/gameStore'
 import { useAchievementStore } from '@/stores/achievementStore'
@@ -14,6 +14,7 @@ import BadgeDisplay from '@/components/achievement/BadgeDisplay.vue'
 import { Trophy, Medal, Crown, Sparkles, Link2, Eye } from 'lucide-vue-next'
 
 const router = useRouter()
+const route = useRoute()
 const characterStore = useCharacterStore()
 const gameStore = useGameStore()
 const achievementStore = useAchievementStore()
@@ -28,11 +29,45 @@ const skillResultMessage = ref('')
 const selectedSkillType = ref<'all' | 'passive' | 'active' | 'combat'>('all')
 const activeProfileTab = ref<'skills' | 'achievements' | 'synergies'>('skills')
 const expandedSynergyId = ref<string | null>(null)
+const highlightedCharacterId = ref<string | null>(null)
 
 onMounted(() => {
   seasonStore.initSeason()
   achievementStore.initAchievements(characterStore.activeCharacter?.id || 'player_local')
   achievementStore.resyncProgress()
+  applyRouteParams()
+})
+
+function applyRouteParams() {
+  const character = route.query.character as string
+  const profile = route.query.profile as string
+
+  if (character) {
+    const char = characterStore.characters.find(c => c.id === character)
+    if (char) {
+      selectedCharacterId.value = char.id
+      nextTick(() => {
+        highlightedCharacterId.value = char.id
+        setTimeout(() => {
+          const el = document.querySelector(`[data-character-id="${char.id}"]`)
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          }
+        }, 200)
+        setTimeout(() => {
+          highlightedCharacterId.value = null
+        }, 3000)
+      })
+    }
+  }
+
+  if (profile === 'skills' || profile === 'achievements' || profile === 'synergies') {
+    activeProfileTab.value = profile
+  }
+}
+
+watch(() => route.query, () => {
+  applyRouteParams()
 })
 
 function goToAchievements() {
@@ -331,12 +366,14 @@ function getUnlockProgress(char: Character): number {
             <div
               v-for="char in characterStore.characters"
               :key="char.id"
+              :data-character-id="char.id"
               @click="selectCharacter(char.id)"
               class="relative p-4 rounded-xl cursor-pointer transition-all hover:scale-102 border-2"
               :class="[
                 rarityBgColors[char.rarity],
                 selectedCharacterId === char.id ? 'border-amber-400 ring-2 ring-amber-400/50' : 'border-transparent',
-                !char.unlocked && 'opacity-60'
+                !char.unlocked && 'opacity-60',
+                highlightedCharacterId === char.id ? 'ring-4 ring-amber-400 ring-opacity-75 animate-pulse scale-[1.02]' : ''
               ]"
             >
               <div class="flex items-center gap-3">

@@ -9,6 +9,7 @@ import { Lock, ShoppingCart, Tag, Clock, Gift, X } from 'lucide-vue-next'
 const props = defineProps<{
   item: ShopItem
   discount?: DiscountConfig | null
+  highlighted?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -95,11 +96,13 @@ function getItemRarityBgClass(rarity?: string): string {
 
 <template>
   <div
+    :data-shop-item-id="item.id"
     class="relative rounded-xl border-2 transition-all duration-300 overflow-hidden group"
     :class="[
       rarityColorClass,
       rarityBgClass,
-      isUnlocked ? 'hover:scale-[1.02] hover:shadow-lg hover:shadow-current/20' : 'opacity-60'
+      isUnlocked ? 'hover:scale-[1.02] hover:shadow-lg hover:shadow-current/20' : 'opacity-60',
+      highlighted ? 'ring-4 ring-amber-400 ring-opacity-75 animate-pulse scale-[1.02]' : ''
     ]"
   >
     <div class="absolute top-0 left-0 z-10 flex gap-1">

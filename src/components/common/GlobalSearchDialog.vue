@@ -87,7 +87,10 @@ function navigateToResult(item: typeof searchStore.flatResults[number]) {
   searchStore.addToHistory(item.title)
   searchStore.closeSearch()
   if (item.route) {
-    router.push(item.route)
+    router.push({
+      path: item.route,
+      query: item.routeQuery || {},
+    })
   }
 }
 

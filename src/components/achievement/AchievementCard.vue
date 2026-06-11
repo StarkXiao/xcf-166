@@ -6,6 +6,7 @@ import { Lock, Check, Gift, Coins } from 'lucide-vue-next'
 const props = defineProps<{
   achievement: Achievement
   playerAchievement?: PlayerAchievement
+  highlighted?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -72,10 +73,12 @@ async function handleClaim() {
 
 <template>
   <div
+    :data-achievement-id="achievement.id"
     class="achievement-card relative rounded-2xl border-2 overflow-hidden transition-all duration-300 hover:scale-[1.02]"
     :class="[
       rarityBorderColors[achievement.rarity],
-      isUnlocked ? 'bg-gray-900/80' : 'bg-gray-900/40'
+      isUnlocked ? 'bg-gray-900/80' : 'bg-gray-900/40',
+      highlighted ? 'ring-4 ring-amber-400 ring-opacity-75 animate-pulse scale-[1.02]' : ''
     ]"
   >
     <div

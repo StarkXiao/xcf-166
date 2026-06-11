@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import { useTaskStore } from '@/stores/taskStore'
 import {
   Calendar,
@@ -15,6 +15,10 @@ import {
   Crown,
   Star,
 } from 'lucide-vue-next'
+
+const props = defineProps<{
+  highlightedTaskId?: string | null
+}>()
 
 const taskStore = useTaskStore()
 const isClaiming = ref(false)
@@ -77,6 +81,19 @@ async function handleClaim(taskId: string) {
   taskStore.claimWeeklyTask(taskId)
   isClaiming.value = false
 }
+
+watch(() => props.highlightedTaskId, (id) => {
+  if (!id) return
+  const task = taskStore.weeklyTaskList.find(t => t.id === id)
+  if (task) {
+    nextTick(() => {
+      setTimeout(() => {
+        const el = document.querySelector(`[data-task-id="${id}"]`)
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 300)
+    })
+  }
+}, { immediate: true })
 </script>
 
 <template>
@@ -113,11 +130,13 @@ async function handleClaim(taskId: string) {
       <div
         v-for="task in taskStore.weeklyTaskList"
         :key="task.id"
+        :data-task-id="task.id"
         class="task-card relative p-5 rounded-2xl transition-all duration-500"
         :class="{
           'bg-gradient-to-r from-green-900/30 to-emerald-900/20 border-2 border-green-500/40': getProgress(task.id)?.completed && !getProgress(task.id)?.claimed,
           'bg-gray-800/30 border border-gray-700/50 opacity-60': getProgress(task.id)?.claimed,
           'bg-gray-900/60 border border-gray-800 hover:border-blue-500/30': !getProgress(task.id)?.completed,
+          'ring-4 ring-amber-400 ring-opacity-75 animate-pulse scale-[1.01]': highlightedTaskId === task.id
         }"
       >
         <div class="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">

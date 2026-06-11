@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSeasonStore } from '@/stores/seasonStore'
 import { useTaskStore } from '@/stores/taskStore'
 import { useActivityStore } from '@/stores/activityStore'
 import { useCharacterStore } from '@/stores/characterStore'
+import { getGrowthTasksByCategory } from '@/game/data/growthTasks'
 import { Trophy, ListTodo, TrendingUp, Gift, ArrowLeft, Calendar, Target, Star } from 'lucide-vue-next'
 import SeasonCenter from '@/components/season/SeasonCenter.vue'
 import TaskList from '@/components/season/TaskList.vue'
@@ -23,6 +24,7 @@ const activityStore = useActivityStore()
 const characterStore = useCharacterStore()
 
 const activeTab = ref('center')
+const highlightedTaskId = ref<string | null>(null)
 
 const tabs = [
   { id: 'center', label: '赛季中心', icon: Trophy },
@@ -41,19 +43,47 @@ function getPlayerId(): string {
   return characterStore.activeCharacter?.id || 'player_local'
 }
 
-onMounted(() => {
-  seasonStore.initSeason(getPlayerId())
-  taskStore.initTaskCenter()
+function applyRouteParams() {
   const tab = route.query.tab as string
   if (tab && tabs.some((t) => t.id === tab)) {
     activeTab.value = tab
   }
+
+  const id = route.query.id as string
+  if (id) {
+    // 根据 id 找到对应 tab
+    const seasonTask = [...seasonStore.dailyTasks, ...seasonStore.weeklyTasks, ...seasonStore.challengeTasks].find(t => t.id === id)
+    const weeklyTask = taskStore.weeklyTaskList.find(t => t.id === id)
+    let growthTask: any = null
+    for (const cat of ['combat', 'economy', 'social', 'exploration', 'collection'] as const) {
+      const t = getGrowthTasksByCategory(cat).find(gt => gt.id === id)
+      if (t) { growthTask = t; break }
+    }
+
+    if (seasonTask) activeTab.value = 'tasks'
+    else if (weeklyTask) activeTab.value = 'weekly_tasks'
+    else if (growthTask) activeTab.value = 'growth_tasks'
+
+    nextTick(() => {
+      highlightedTaskId.value = id
+    })
+  }
+}
+
+onMounted(() => {
+  seasonStore.initSeason(getPlayerId())
+  taskStore.initTaskCenter()
+  applyRouteParams()
   seasonStore.startAutoCheck(1000)
 
   activityStore.trackExposure(SEASON_ACTIVITY_ID, getPlayerId(), {
     page: 'season_center',
     source: route.query.source || 'direct',
   })
+})
+
+watch(() => route.query, () => {
+  applyRouteParams()
 })
 
 onUnmounted(() => {
@@ -179,9 +209,9 @@ function goBack() {
       <div class="flex-1 overflow-y-auto p-6">
         <Transition name="fade-slide" mode="out-in">
           <SeasonCenter v-if="activeTab === 'center'" :key="'center'" />
-          <TaskList v-else-if="activeTab === 'tasks'" :key="'tasks'" />
-          <WeeklyTaskPanel v-else-if="activeTab === 'weekly_tasks'" :key="'weekly_tasks'" />
-          <GrowthTaskPanel v-else-if="activeTab === 'growth_tasks'" :key="'growth_tasks'" />
+          <TaskList v-else-if="activeTab === 'tasks'" :key="'tasks'" :highlighted-task-id="highlightedTaskId" />
+          <WeeklyTaskPanel v-else-if="activeTab === 'weekly_tasks'" :key="'weekly_tasks'" :highlighted-task-id="highlightedTaskId" />
+          <GrowthTaskPanel v-else-if="activeTab === 'growth_tasks'" :key="'growth_tasks'" :highlighted-task-id="highlightedTaskId" />
           <RewardPoolPanel v-else-if="activeTab === 'reward_pool'" :key="'reward_pool'" />
           <ProgressTracker v-else-if="activeTab === 'progress'" :key="'progress'" />
           <RewardCenter v-else-if="activeTab === 'rewards'" :key="'rewards'" />

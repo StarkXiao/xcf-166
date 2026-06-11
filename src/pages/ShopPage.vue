@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useShopStore } from '../stores/shopStore'
 import { useGameStore } from '../stores/gameStore'
 import type { ShopItem, ItemCategory } from '../types/shop'
@@ -23,11 +24,13 @@ import {
   ShoppingCart as ShoppingCartIcon
 } from 'lucide-vue-next'
 
+const route = useRoute()
 const shopStore = useShopStore()
 const gameStore = useGameStore()
 
 type TabType = 'shop' | 'orders' | 'inventory'
 const activeTab = ref<TabType>('shop')
+const highlightedItemId = ref<string | null>(null)
 
 const showPurchaseModal = ref(false)
 const showCartModal = ref(false)
@@ -90,6 +93,45 @@ function handleCartPurchaseSuccess(order: any) {
   console.log('Cart purchase successful:', order)
   showCartModal.value = false
 }
+
+function applyRouteParams() {
+  const tab = route.query.tab as string
+  const category = route.query.category as string
+  const id = route.query.id as string
+
+  if (tab === 'shop' || tab === 'orders' || tab === 'inventory') {
+    activeTab.value = tab
+  }
+
+  if (category && ['all', 'consumable', 'buff', 'gift_pack', 'material', 'cosmetic'].includes(category)) {
+    shopStore.setCategory(category as ItemCategory | 'all')
+  } else if (!category) {
+    shopStore.setCategory('all')
+  }
+
+  if (id) {
+    nextTick(() => {
+      highlightedItemId.value = id
+      setTimeout(() => {
+        const el = document.querySelector(`[data-shop-item-id="${id}"]`)
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+      }, 200)
+      setTimeout(() => {
+        highlightedItemId.value = null
+      }, 3000)
+    })
+  }
+}
+
+onMounted(() => {
+  applyRouteParams()
+})
+
+watch(() => route.query, () => {
+  applyRouteParams()
+})
 </script>
 
 <template>
@@ -229,6 +271,7 @@ function handleCartPurchaseSuccess(order: any) {
             :key="item.id"
             :item="item"
             :discount="shopStore.getItemDiscount(item.id, item.category)"
+            :highlighted="highlightedItemId === item.id"
             @buy="handleBuy"
             @add-to-cart="handleAddToCart"
           />

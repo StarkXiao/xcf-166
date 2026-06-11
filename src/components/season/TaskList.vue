@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch, nextTick } from 'vue'
 import { useSeasonStore } from '@/stores/seasonStore'
 import { useActivityStore } from '@/stores/activityStore'
 import { useCharacterStore } from '@/stores/characterStore'
 import TaskCard from './TaskCard.vue'
 import { ListTodo, Calendar, Trophy, Target } from 'lucide-vue-next'
+
+const props = defineProps<{
+  highlightedTaskId?: string | null
+}>()
 
 const seasonStore = useSeasonStore()
 const activityStore = useActivityStore()
@@ -30,6 +34,23 @@ function switchTab(tabId: 'daily' | 'weekly' | 'challenge') {
     tabName: tabs.find(t => t.id === tabId)?.label,
   })
 }
+
+watch(() => props.highlightedTaskId, (id) => {
+  if (!id) return
+  const daily = seasonStore.dailyTasks.find(t => t.id === id)
+  const weekly = seasonStore.weeklyTasks.find(t => t.id === id)
+  const challenge = seasonStore.challengeTasks.find(t => t.id === id)
+  if (daily) activeTab.value = 'daily'
+  else if (weekly) activeTab.value = 'weekly'
+  else if (challenge) activeTab.value = 'challenge'
+
+  nextTick(() => {
+    setTimeout(() => {
+      const el = document.querySelector(`[data-task-id="${id}"]`)
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 300)
+  })
+}, { immediate: true })
 
 function getTasksForTab(tab: 'daily' | 'weekly' | 'challenge') {
   switch (tab) {
@@ -103,6 +124,7 @@ function getProgressForTab(tab: 'daily' | 'weekly' | 'challenge') {
           :key="task.id"
           :task="task"
           :progress="seasonStore.getTaskProgress(task.id)"
+          :highlighted="highlightedTaskId === task.id"
         />
       </TransitionGroup>
 
