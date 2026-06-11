@@ -23,6 +23,14 @@ import {
   Star,
   Zap,
   BarChart3,
+  Download,
+  AlertTriangle,
+  Filter,
+  GitCommitHorizontal,
+  BarChart2,
+  LineChart,
+  ArrowDownRight,
+  ArrowUpRight,
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -36,6 +44,9 @@ const achievementStore = useAchievementStore()
 const orderStore = useOrderStore()
 
 const selectedPeriod = ref<'7' | '14' | '30'>('7')
+const selectedFunnelType = ref<'order' | 'activity' | 'battle'>('order')
+const trendChartMode = ref<'line' | 'bar'>('line')
+const trendMetricFilter = ref<'all' | 'activity' | 'orders' | 'revenue'>('all')
 
 function toDateString(ts: number): string {
   return new Date(ts).toDateString()
@@ -520,6 +531,295 @@ function formatDuration(seconds: number) {
 function goBack() {
   router.push('/')
 }
+
+const funnelAnalysis = computed(() => {
+  if (selectedFunnelType.value === 'order') {
+    const totalAvailable = orderStore.pendingOrdersList.length + orderStore.acceptedOrdersList.length + gameStore.stats.totalOrdersCompleted
+    const accepted = orderStore.acceptedOrdersList.length + gameStore.stats.totalOrdersCompleted
+    const completed = gameStore.stats.totalOrdersCompleted
+    const perfectCompleted = achievementStore.behaviorEvents.filter(e => e.eventType === 'perfect_completed').length
+    const steps = [
+      { label: '订单出现', count: totalAvailable, color: '#22d3ee' },
+      { label: '订单接受', count: accepted, color: '#4ade80' },
+      { label: '订单完成', count: completed, color: '#fbbf24' },
+      { label: '完美完成', count: perfectCompleted, color: '#f87171' },
+    ]
+    const rates = []
+    for (let i = 1; i < steps.length; i++) {
+      const prev = steps[i - 1].count
+      const curr = steps[i].count
+      rates.push(prev > 0 ? Math.round((curr / prev) * 1000) / 10 : 0)
+    }
+    const overallRate = steps[0].count > 0 ? Math.round((steps[steps.length - 1].count / steps[0].count) * 1000) / 10 : 0
+    return { steps, rates, overallRate, title: '订单转化漏斗' }
+  } else if (selectedFunnelType.value === 'activity') {
+    const exposures = activityStore.events.filter(e => e.eventType === 'exposure').length
+    const clicks = activityStore.events.filter(e => e.eventType === 'click').length
+    const claims = activityStore.events.filter(e => e.eventType === 'claim').length
+    const completions = activityStore.events.filter(e => e.eventType === 'complete').length
+    const steps = [
+      { label: '活动曝光', count: exposures, color: '#a78bfa' },
+      { label: '点击参与', count: clicks, color: '#818cf8' },
+      { label: '领取奖励', count: claims, color: '#fbbf24' },
+      { label: '完成活动', count: completions, color: '#4ade80' },
+    ]
+    const rates = []
+    for (let i = 1; i < steps.length; i++) {
+      const prev = steps[i - 1].count
+      const curr = steps[i].count
+      rates.push(prev > 0 ? Math.round((curr / prev) * 1000) / 10 : 0)
+    }
+    const overallRate = steps[0].count > 0 ? Math.round((steps[steps.length - 1].count / steps[0].count) * 1000) / 10 : 0
+    return { steps, rates, overallRate, title: '活动参与漏斗' }
+  } else {
+    const totalBattles = dungeonStore.battleHistory.length
+    const victories = dungeonStore.battleHistory.filter(b => b.result === 'victory').length
+    const star3 = dungeonStore.battleHistory.filter(b => b.starRating >= 3).length
+    const perfect = achievementStore.behaviorEvents.filter(e => e.eventType === 'perfect_completed').length
+    const steps = [
+      { label: '进入战斗', count: totalBattles, color: '#f87171' },
+      { label: '战斗胜利', count: victories, color: '#fb923c' },
+      { label: '三星通关', count: star3, color: '#fbbf24' },
+      { label: '完美通关', count: perfect, color: '#4ade80' },
+    ]
+    const rates = []
+    for (let i = 1; i < steps.length; i++) {
+      const prev = steps[i - 1].count
+      const curr = steps[i].count
+      rates.push(prev > 0 ? Math.round((curr / prev) * 1000) / 10 : 0)
+    }
+    const overallRate = steps[0].count > 0 ? Math.round((steps[steps.length - 1].count / steps[0].count) * 1000) / 10 : 0
+    return { steps, rates, overallRate, title: '战斗进阶漏斗' }
+  }
+})
+
+const funnelMaxCount = computed(() => Math.max(...funnelAnalysis.value.steps.map(s => s.count), 1))
+
+const funnelSvgData = computed(() => {
+  const steps = funnelAnalysis.value.steps
+  const max = funnelMaxCount.value
+  const width = 700
+  const height = 60
+  const gap = 16
+  const paddingX = 40
+  return steps.map((step, i) => {
+    const ratio = max > 0 ? step.count / max : 0
+    const barWidth = Math.max(ratio * (width - paddingX * 2), 20)
+    const x = paddingX + (width - paddingX * 2 - barWidth) / 2
+    const y = i * (height + gap) + 10
+    return { ...step, x, y, width: barWidth, height, index: i }
+  })
+})
+
+const trendComparison = computed(() => {
+  const days = parseInt(selectedPeriod.value)
+  const now = Date.now()
+  const currentStart = now - days * 24 * 60 * 60 * 1000
+  const prevStart = currentStart - days * 24 * 60 * 60 * 1000
+
+  const currentEvents = achievementStore.behaviorEvents.filter(e => e.timestamp >= currentStart)
+  const prevEvents = achievementStore.behaviorEvents.filter(e => e.timestamp >= prevStart && e.timestamp < currentStart)
+
+  const currentBattles = dungeonStore.battleHistory.filter(b => b.completedAt >= currentStart)
+  const prevBattles = dungeonStore.battleHistory.filter(b => b.completedAt >= prevStart && b.completedAt < currentStart)
+
+  const currentOrders = shopStore.completedOrders.filter(o => o.createdAt >= currentStart)
+  const prevOrders = shopStore.completedOrders.filter(o => o.createdAt >= prevStart && o.createdAt < currentStart)
+
+  const currentActivity = currentEvents.length + currentBattles.length
+  const prevActivity = prevEvents.length + prevBattles.length
+  const currentOrderCount = currentEvents.filter(e => e.eventType === 'order_completed').length
+  const prevOrderCount = prevEvents.filter(e => e.eventType === 'order_completed').length
+  const currentRevenue = currentOrders.reduce((s, o) => s + o.totalPrice.money, 0)
+  const prevRevenue = prevOrders.reduce((s, o) => s + o.totalPrice.money, 0)
+
+  function delta(curr: number, prev: number) {
+    if (prev === 0) return curr > 0 ? 100 : 0
+    return Math.round(((curr - prev) / prev) * 1000) / 10
+  }
+
+  return {
+    current: { activity: currentActivity, orders: currentOrderCount, revenue: currentRevenue },
+    previous: { activity: prevActivity, orders: prevOrderCount, revenue: prevRevenue },
+    deltas: {
+      activity: delta(currentActivity, prevActivity),
+      orders: delta(currentOrderCount, prevOrderCount),
+      revenue: delta(currentRevenue, prevRevenue),
+    },
+  }
+})
+
+const comparisonChartData = computed(() => {
+  const days = parseInt(selectedPeriod.value)
+  const now = Date.now()
+  const currentStart = now - days * 24 * 60 * 60 * 1000
+  const prevStart = currentStart - days * 24 * 60 * 60 * 1000
+
+  const currentDaily = new Map<string, number>()
+  const prevDaily = new Map<string, number>()
+
+  for (let i = days - 1; i >= 0; i--) {
+    const d1 = new Date()
+    d1.setDate(d1.getDate() - i)
+    currentDaily.set(toDateKey(d1.getTime()), 0)
+    const d2 = new Date(prevStart + i * 24 * 60 * 60 * 1000)
+    prevDaily.set(toDateKey(d2.getTime()), 0)
+  }
+
+  const currentEvents = achievementStore.behaviorEvents.filter(e => e.timestamp >= currentStart)
+  const prevEvents = achievementStore.behaviorEvents.filter(e => e.timestamp >= prevStart && e.timestamp < currentStart)
+
+  currentEvents.forEach(e => {
+    const key = toDateKey(e.timestamp)
+    if (currentDaily.has(key)) currentDaily.set(key, (currentDaily.get(key) || 0) + 1)
+  })
+  prevEvents.forEach(e => {
+    const key = toDateKey(e.timestamp)
+    if (prevDaily.has(key)) prevDaily.set(key, (prevDaily.get(key) || 0) + 1)
+  })
+
+  const currentValues = Array.from(currentDaily.values())
+  const prevValues = Array.from(prevDaily.values())
+  const maxVal = Math.max(...currentValues, ...prevValues, 1)
+
+  const barWidth = days <= 14 ? 20 : 10
+  const svgWidth = 860
+  const svgHeight = 200
+  const padding = 50
+  const chartWidth = svgWidth - padding
+  const stepX = chartWidth / days
+
+  const currentBars = currentValues.map((v, i) => ({
+    x: padding + i * stepX + 2,
+    y: svgHeight - (v / maxVal) * svgHeight,
+    width: barWidth / 2 - 1,
+    height: (v / maxVal) * svgHeight,
+  }))
+  const prevBars = prevValues.map((v, i) => ({
+    x: padding + i * stepX + barWidth / 2 + 1,
+    y: svgHeight - (v / maxVal) * svgHeight,
+    width: barWidth / 2 - 1,
+    height: (v / maxVal) * svgHeight,
+  }))
+
+  return { currentBars, prevBars, maxVal, svgWidth, svgHeight, stepX, padding, days }
+})
+
+const anomalyAlerts = computed(() => {
+  const alerts: { type: 'warning' | 'danger'; message: string; metric: string }[] = []
+
+  if (userActivityMetrics.value.engagementRate < 30) {
+    alerts.push({ type: 'danger', message: `活跃率仅 ${userActivityMetrics.value.engagementRate}%，远低于健康阈值 30%`, metric: '活跃率' })
+  }
+
+  if (taskCompletionMetrics.value.completionRate < 50) {
+    alerts.push({ type: 'warning', message: `订单完成率 ${taskCompletionMetrics.value.completionRate}%，低于 50% 基线`, metric: '完成率' })
+  }
+
+  const delta = trendComparison.value.deltas
+  if (delta.activity < -30) {
+    alerts.push({ type: 'danger', message: `活跃度环比下降 ${Math.abs(delta.activity)}%，需关注用户粘性`, metric: '活跃度' })
+  }
+  if (delta.revenue < -30) {
+    alerts.push({ type: 'warning', message: `收入环比下降 ${Math.abs(delta.revenue)}%，需排查消费链路`, metric: '收入' })
+  }
+  if (delta.orders < -30) {
+    alerts.push({ type: 'warning', message: `订单量环比下降 ${Math.abs(delta.orders)}%，需检查订单来源`, metric: '订单量' })
+  }
+
+  if (retentionMetrics.value.winRate < 40 && retentionMetrics.value.totalBattles > 5) {
+    alerts.push({ type: 'warning', message: `战斗胜率仅 ${retentionMetrics.value.winRate}%，可能存在关卡难度问题`, metric: '胜率' })
+  }
+
+  const dailyData = dailyTrendData.value
+  if (dailyData.length >= 3) {
+    const last3 = dailyData.slice(-3)
+    const allZero = last3.every(d => d.activity === 0 && d.orders === 0)
+    if (allZero) {
+      alerts.push({ type: 'danger', message: '近3天无任何活动与订单数据，疑似沉睡状态', metric: '沉睡检测' })
+    }
+  }
+
+  return alerts
+})
+
+const showAnomalyPanel = ref(true)
+
+function exportCSV() {
+  const rows: string[][] = []
+  rows.push(['=== 数据统计驾驶舱导出 ==='])
+  rows.push([`导出时间: ${new Date().toLocaleString('zh-CN')}`, `周期: 最近${selectedPeriod.value}天`])
+  rows.push([])
+
+  rows.push(['--- 用户活跃 ---'])
+  rows.push(['好友数量', String(userActivityMetrics.value.friendCount)])
+  rows.push(['日均订单', userActivityMetrics.value.avgOrdersPerDay])
+  rows.push(['总行为数', String(userActivityMetrics.value.totalActions)])
+  rows.push(['活跃率', `${userActivityMetrics.value.engagementRate}%`])
+  rows.push([])
+
+  rows.push(['--- 任务完成 ---'])
+  rows.push(['订单完成数', String(taskCompletionMetrics.value.totalOrdersCompleted)])
+  rows.push(['完成率', `${taskCompletionMetrics.value.completionRate}%`])
+  rows.push(['赛季任务完成率', `${taskCompletionMetrics.value.seasonCompletionRate}%`])
+  rows.push(['成就达成率', `${taskCompletionMetrics.value.achievementRate}%`])
+  rows.push([])
+
+  rows.push(['--- 付费转化 ---'])
+  rows.push(['总购买次数', String(paymentConversionMetrics.value.totalPurchases)])
+  rows.push(['总收入', String(paymentConversionMetrics.value.totalRevenue)])
+  rows.push(['客单价', String(paymentConversionMetrics.value.avgOrderValue)])
+  rows.push(['付费转化率', `${paymentConversionMetrics.value.payRateByActive}%`])
+  rows.push([])
+
+  rows.push(['--- 活动参与 ---'])
+  rows.push(['进行中活动', String(activityParticipationMetrics.value.activeActivities)])
+  rows.push(['点击率', `${activityParticipationMetrics.value.clickRate}%`])
+  rows.push(['领取转化率', `${activityParticipationMetrics.value.claimRate}%`])
+  rows.push(['完成率', `${activityParticipationMetrics.value.completionRate}%`])
+  rows.push([])
+
+  rows.push(['--- 核心玩法留存 ---'])
+  rows.push(['战斗胜率', `${retentionMetrics.value.winRate}%`])
+  rows.push(['次日留存', `${retentionMetrics.value.day1Retention}%`])
+  rows.push(['7日留存', `${retentionMetrics.value.day7Retention}%`])
+  rows.push(['30日留存', `${retentionMetrics.value.day30Retention}%`])
+  rows.push([])
+
+  rows.push(['--- 趋势对比(环比) ---'])
+  rows.push(['指标', '本期', '上期', '变化%'])
+  rows.push(['活跃度', String(trendComparison.value.current.activity), String(trendComparison.value.previous.activity), `${trendComparison.value.deltas.activity}%`])
+  rows.push(['订单量', String(trendComparison.value.current.orders), String(trendComparison.value.previous.orders), `${trendComparison.value.deltas.orders}%`])
+  rows.push(['收入', String(trendComparison.value.current.revenue), String(trendComparison.value.previous.revenue), `${trendComparison.value.deltas.revenue}%`])
+  rows.push([])
+
+  rows.push(['--- 漏斗分析 ---'])
+  const funnel = funnelAnalysis.value
+  rows.push(['步骤', '数量', '转化率'])
+  funnel.steps.forEach((step, i) => {
+    const rate = i === 0 ? '100%' : `${funnel.rates[i - 1]}%`
+    rows.push([step.label, String(step.count), rate])
+  })
+  rows.push([])
+  rows.push(['总转化率', `${funnel.overallRate}%`])
+
+  rows.push([])
+  rows.push(['--- 每日趋势 ---'])
+  rows.push(['日期', '活跃度', '订单量', '收入'])
+  dailyTrendData.value.forEach(d => {
+    rows.push([d.label, String(d.activity), String(d.orders), String(d.revenue)])
+  })
+
+  const csvContent = rows.map(r => r.join(',')).join('\n')
+  const BOM = '\uFEFF'
+  const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `dashboard_export_${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
 </script>
 
 <template>
@@ -542,6 +842,30 @@ function goBack() {
           </div>
         </div>
         <div class="flex items-center gap-3">
+          <div class="flex items-center gap-1 bg-gray-700/50 rounded-lg p-0.5">
+            <button
+              @click="trendMetricFilter = 'all'"
+              class="px-2 py-1 text-xs rounded transition-colors"
+              :class="trendMetricFilter === 'all' ? 'bg-cyan-600 text-white' : 'text-gray-400 hover:text-white'"
+            >
+              <Filter class="w-3 h-3 inline mr-1" />全部
+            </button>
+            <button
+              @click="trendMetricFilter = 'activity'"
+              class="px-2 py-1 text-xs rounded transition-colors"
+              :class="trendMetricFilter === 'activity' ? 'bg-cyan-600 text-white' : 'text-gray-400 hover:text-white'"
+            >活跃度</button>
+            <button
+              @click="trendMetricFilter = 'orders'"
+              class="px-2 py-1 text-xs rounded transition-colors"
+              :class="trendMetricFilter === 'orders' ? 'bg-cyan-600 text-white' : 'text-gray-400 hover:text-white'"
+            >订单量</button>
+            <button
+              @click="trendMetricFilter = 'revenue'"
+              class="px-2 py-1 text-xs rounded transition-colors"
+              :class="trendMetricFilter === 'revenue' ? 'bg-cyan-600 text-white' : 'text-gray-400 hover:text-white'"
+            >收入</button>
+          </div>
           <select
             v-model="selectedPeriod"
             class="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-white focus:outline-none focus:border-cyan-500"
@@ -550,6 +874,13 @@ function goBack() {
             <option value="14">最近14天</option>
             <option value="30">最近30天</option>
           </select>
+          <button
+            @click="exportCSV"
+            class="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-gray-300 hover:text-white hover:border-cyan-500 transition-colors flex items-center gap-1.5"
+          >
+            <Download class="w-4 h-4" />
+            导出
+          </button>
           <div class="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 flex items-center gap-2">
             <Clock class="w-4 h-4 text-gray-400" />
             第 {{ userActivityMetrics.day }} 天
@@ -624,20 +955,65 @@ function goBack() {
         </div>
       </div>
 
+      <div
+        v-if="anomalyAlerts.length > 0 && showAnomalyPanel"
+        class="bg-gradient-to-r from-red-950/60 via-amber-950/40 to-red-950/60 backdrop-blur-sm rounded-xl p-4 border border-red-500/30"
+      >
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-semibold text-red-300 flex items-center gap-2">
+            <AlertTriangle class="w-4 h-4 text-red-400" />
+            异常预警 ({{ anomalyAlerts.length }})
+          </h3>
+          <button @click="showAnomalyPanel = false" class="text-xs text-gray-500 hover:text-gray-300">关闭</button>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div
+            v-for="(alert, i) in anomalyAlerts"
+            :key="i"
+            class="flex items-start gap-2 p-2.5 rounded-lg"
+            :class="alert.type === 'danger' ? 'bg-red-900/30 border border-red-500/20' : 'bg-amber-900/30 border border-amber-500/20'"
+          >
+            <AlertTriangle class="w-4 h-4 mt-0.5 flex-shrink-0" :class="alert.type === 'danger' ? 'text-red-400' : 'text-amber-400'" />
+            <div>
+              <p class="text-xs font-medium" :class="alert.type === 'danger' ? 'text-red-300' : 'text-amber-300'">{{ alert.metric }}</p>
+              <p class="text-xs text-gray-400 mt-0.5">{{ alert.message }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="bg-gray-800/80 backdrop-blur-sm rounded-xl p-6 border border-gray-700">
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-sm font-semibold text-gray-300 flex items-center gap-2">
             <TrendingUp class="w-4 h-4 text-cyan-400" />
             核心指标趋势
           </h3>
-          <div class="flex items-center gap-4 text-xs">
-            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-cyan-400 inline-block"></span> 活跃度</span>
-            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-400 inline-block"></span> 订单量</span>
-            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span> 收入</span>
+          <div class="flex items-center gap-3">
+            <div class="flex items-center gap-4 text-xs">
+              <span v-if="trendMetricFilter === 'all' || trendMetricFilter === 'activity'" class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-cyan-400 inline-block"></span> 活跃度</span>
+              <span v-if="trendMetricFilter === 'all' || trendMetricFilter === 'orders'" class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-400 inline-block"></span> 订单量</span>
+              <span v-if="trendMetricFilter === 'all' || trendMetricFilter === 'revenue'" class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span> 收入</span>
+            </div>
+            <div class="flex items-center gap-1 bg-gray-700/50 rounded-lg p-0.5">
+              <button
+                @click="trendChartMode = 'line'"
+                class="p-1.5 rounded transition-colors"
+                :class="trendChartMode === 'line' ? 'bg-cyan-600 text-white' : 'text-gray-400 hover:text-white'"
+              >
+                <LineChart class="w-3.5 h-3.5" />
+              </button>
+              <button
+                @click="trendChartMode = 'bar'"
+                class="p-1.5 rounded transition-colors"
+                :class="trendChartMode === 'bar' ? 'bg-cyan-600 text-white' : 'text-gray-400 hover:text-white'"
+              >
+                <BarChart2 class="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         </div>
         <div class="h-64">
-          <svg width="100%" height="100%" viewBox="0 0 920 240" preserveAspectRatio="none">
+          <svg v-if="trendChartMode === 'line'" width="100%" height="100%" viewBox="0 0 920 240" preserveAspectRatio="none">
             <defs>
               <linearGradient id="trendActivityGrad" x1="0%" y1="0%" x2="0%" y2="100%">
                 <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.3" />
@@ -659,12 +1035,50 @@ function goBack() {
               <line x1="50" y1="170" x2="910" y2="170" />
               <line x1="50" y1="220" x2="910" y2="220" />
             </g>
-            <path :d="revenueAreaPath" fill="url(#trendRevenueGrad)" />
-            <path :d="revenueLinePath" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-            <path :d="orderAreaPath" fill="url(#trendOrderGrad)" />
-            <path :d="orderLinePath" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-            <path :d="activityAreaPath" fill="url(#trendActivityGrad)" />
-            <path :d="activityLinePath" fill="none" stroke="#22d3ee" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <template v-if="trendMetricFilter === 'all' || trendMetricFilter === 'revenue'">
+              <path :d="revenueAreaPath" fill="url(#trendRevenueGrad)" />
+              <path :d="revenueLinePath" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            </template>
+            <template v-if="trendMetricFilter === 'all' || trendMetricFilter === 'orders'">
+              <path :d="orderAreaPath" fill="url(#trendOrderGrad)" />
+              <path :d="orderLinePath" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            </template>
+            <template v-if="trendMetricFilter === 'all' || trendMetricFilter === 'activity'">
+              <path :d="activityAreaPath" fill="url(#trendActivityGrad)" />
+              <path :d="activityLinePath" fill="none" stroke="#22d3ee" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            </template>
+            <g font-size="10" fill="#6b7280">
+              <text v-for="(label, i) in trendXLabels" :key="i" :x="label.x" y="238" text-anchor="middle">
+                {{ label.text }}
+              </text>
+            </g>
+          </svg>
+          <svg v-else width="100%" height="100%" viewBox="0 0 920 240" preserveAspectRatio="none">
+            <g stroke="#374151" stroke-width="1" stroke-dasharray="3,3">
+              <line x1="50" y1="20" x2="910" y2="20" />
+              <line x1="50" y1="70" x2="910" y2="70" />
+              <line x1="50" y1="120" x2="910" y2="120" />
+              <line x1="50" y1="170" x2="910" y2="170" />
+              <line x1="50" y1="220" x2="910" y2="220" />
+            </g>
+            <template v-if="trendMetricFilter === 'all' || trendMetricFilter === 'activity'">
+              <rect v-for="(pt, i) in activityPoints" :key="'a'+i"
+                :x="pt.x - 4" :y="pt.y" width="8" :height="220 - pt.y" rx="2"
+                fill="#22d3ee" fill-opacity="0.6"
+              />
+            </template>
+            <template v-if="trendMetricFilter === 'all' || trendMetricFilter === 'orders'">
+              <rect v-for="(pt, i) in orderPoints" :key="'o'+i"
+                :x="pt.x + 4" :y="pt.y" width="8" :height="220 - pt.y" rx="2"
+                fill="#4ade80" fill-opacity="0.6"
+              />
+            </template>
+            <template v-if="trendMetricFilter === 'all' || trendMetricFilter === 'revenue'">
+              <rect v-for="(pt, i) in revenuePoints" :key="'r'+i"
+                :x="pt.x + 12" :y="pt.y" width="8" :height="220 - pt.y" rx="2"
+                fill="#fbbf24" fill-opacity="0.6"
+              />
+            </template>
             <g font-size="10" fill="#6b7280">
               <text v-for="(label, i) in trendXLabels" :key="i" :x="label.x" y="238" text-anchor="middle">
                 {{ label.text }}
@@ -924,6 +1338,140 @@ function goBack() {
               <span class="text-gray-400">总事件数</span>
               <span class="text-white font-medium">{{ activityParticipationMetrics.totalEvents }}</span>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-6">
+        <div class="bg-gray-800/80 backdrop-blur-sm rounded-xl p-6 border border-gray-700">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-semibold text-gray-300 flex items-center gap-2">
+              <GitCommitHorizontal class="w-4 h-4 text-cyan-400" />
+              {{ funnelAnalysis.title }}
+            </h3>
+            <div class="flex items-center gap-1 bg-gray-700/50 rounded-lg p-0.5">
+              <button
+                @click="selectedFunnelType = 'order'"
+                class="px-2 py-1 text-xs rounded transition-colors"
+                :class="selectedFunnelType === 'order' ? 'bg-cyan-600 text-white' : 'text-gray-400 hover:text-white'"
+              >订单</button>
+              <button
+                @click="selectedFunnelType = 'activity'"
+                class="px-2 py-1 text-xs rounded transition-colors"
+                :class="selectedFunnelType === 'activity' ? 'bg-cyan-600 text-white' : 'text-gray-400 hover:text-white'"
+              >活动</button>
+              <button
+                @click="selectedFunnelType = 'battle'"
+                class="px-2 py-1 text-xs rounded transition-colors"
+                :class="selectedFunnelType === 'battle' ? 'bg-cyan-600 text-white' : 'text-gray-400 hover:text-white'"
+              >战斗</button>
+            </div>
+          </div>
+          <div class="flex gap-4">
+            <div class="flex-1">
+              <svg width="100%" viewBox="0 0 700 310" preserveAspectRatio="xMidYMid meet">
+                <template v-for="(bar, i) in funnelSvgData" :key="i">
+                  <rect
+                    :x="bar.x" :y="bar.y"
+                    :width="bar.width" :height="bar.height"
+                    :fill="bar.color" fill-opacity="0.7"
+                    rx="6"
+                  />
+                  <text :x="bar.x + bar.width / 2" :y="bar.y + bar.height / 2 - 4" text-anchor="middle" font-size="13" font-weight="bold" fill="white">{{ bar.count }}</text>
+                  <text :x="bar.x + bar.width / 2" :y="bar.y + bar.height / 2 + 12" text-anchor="middle" font-size="10" fill="white" fill-opacity="0.7">{{ bar.label }}</text>
+                  <text v-if="i > 0" :x="bar.x + bar.width / 2" :y="bar.y - 4" text-anchor="middle" font-size="11" font-weight="bold" fill="#fbbf24">{{ funnelAnalysis.rates[i - 1] }}%</text>
+                  <path v-if="i > 0" :d="`M ${funnelSvgData[i-1].x + funnelSvgData[i-1].width / 2} ${funnelSvgData[i-1].y + funnelSvgData[i-1].height} L ${bar.x + bar.width / 2} ${bar.y}`" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="4,3" fill="none" />
+                </template>
+              </svg>
+            </div>
+            <div class="w-44 space-y-2">
+              <div class="bg-gray-900/60 rounded-lg p-3 text-center">
+                <p class="text-xs text-gray-500 mb-1">总转化率</p>
+                <p class="text-2xl font-bold text-cyan-400">{{ funnelAnalysis.overallRate }}%</p>
+              </div>
+              <div v-for="(rate, i) in funnelAnalysis.rates" :key="i" class="bg-gray-900/40 rounded-lg p-2.5">
+                <div class="flex items-center justify-between text-xs mb-1">
+                  <span class="text-gray-400">{{ funnelAnalysis.steps[i].label }} → {{ funnelAnalysis.steps[i + 1].label }}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <div class="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden mr-2">
+                    <div class="h-full rounded-full" :class="rate >= 70 ? 'bg-green-500' : rate >= 40 ? 'bg-amber-500' : 'bg-red-500'" :style="{ width: `${Math.min(rate, 100)}%` }"></div>
+                  </div>
+                  <span class="text-xs font-medium" :class="rate >= 70 ? 'text-green-400' : rate >= 40 ? 'text-amber-400' : 'text-red-400'">{{ rate }}%</span>
+                </div>
+                <div class="flex items-center justify-between mt-1 text-xs text-gray-500">
+                  <span>{{ funnelAnalysis.steps[i].count }}</span>
+                  <ArrowDownRight class="w-3 h-3 text-gray-600" />
+                  <span>{{ funnelAnalysis.steps[i + 1].count }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-gray-800/80 backdrop-blur-sm rounded-xl p-6 border border-gray-700">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-semibold text-gray-300 flex items-center gap-2">
+              <TrendingUp class="w-4 h-4 text-green-400" />
+              趋势对比 (环比)
+            </h3>
+            <span class="text-xs text-gray-500">本期 vs 上期 (最近{{ selectedPeriod }}天)</span>
+          </div>
+          <div class="grid grid-cols-3 gap-4 mb-4">
+            <div class="bg-gray-900/60 rounded-lg p-3">
+              <p class="text-xs text-gray-500 mb-1">活跃度</p>
+              <div class="flex items-end gap-2">
+                <span class="text-lg font-bold text-white">{{ trendComparison.current.activity }}</span>
+                <span class="text-xs" :class="trendComparison.deltas.activity >= 0 ? 'text-green-400' : 'text-red-400'">
+                  <component :is="trendComparison.deltas.activity >= 0 ? ArrowUpRight : ArrowDownRight" class="w-3 h-3 inline" />
+                  {{ Math.abs(trendComparison.deltas.activity) }}%
+                </span>
+              </div>
+              <p class="text-xs text-gray-500 mt-1">上期 {{ trendComparison.previous.activity }}</p>
+            </div>
+            <div class="bg-gray-900/60 rounded-lg p-3">
+              <p class="text-xs text-gray-500 mb-1">订单量</p>
+              <div class="flex items-end gap-2">
+                <span class="text-lg font-bold text-white">{{ trendComparison.current.orders }}</span>
+                <span class="text-xs" :class="trendComparison.deltas.orders >= 0 ? 'text-green-400' : 'text-red-400'">
+                  <component :is="trendComparison.deltas.orders >= 0 ? ArrowUpRight : ArrowDownRight" class="w-3 h-3 inline" />
+                  {{ Math.abs(trendComparison.deltas.orders) }}%
+                </span>
+              </div>
+              <p class="text-xs text-gray-500 mt-1">上期 {{ trendComparison.previous.orders }}</p>
+            </div>
+            <div class="bg-gray-900/60 rounded-lg p-3">
+              <p class="text-xs text-gray-500 mb-1">收入</p>
+              <div class="flex items-end gap-2">
+                <span class="text-lg font-bold text-white">{{ trendComparison.current.revenue }}</span>
+                <span class="text-xs" :class="trendComparison.deltas.revenue >= 0 ? 'text-green-400' : 'text-red-400'">
+                  <component :is="trendComparison.deltas.revenue >= 0 ? ArrowUpRight : ArrowDownRight" class="w-3 h-3 inline" />
+                  {{ Math.abs(trendComparison.deltas.revenue) }}%
+                </span>
+              </div>
+              <p class="text-xs text-gray-500 mt-1">上期 {{ trendComparison.previous.revenue }}</p>
+            </div>
+          </div>
+          <div class="h-40">
+            <svg width="100%" height="100%" :viewBox="`0 0 ${comparisonChartData.svgWidth} ${comparisonChartData.svgHeight + 20}`" preserveAspectRatio="none">
+              <g stroke="#374151" stroke-width="1" stroke-dasharray="3,3">
+                <line :x1="comparisonChartData.padding" y1="0" :x2="comparisonChartData.svgWidth" y2="0" />
+                <line :x1="comparisonChartData.padding" :y1="comparisonChartData.svgHeight / 2" :x2="comparisonChartData.svgWidth" :y2="comparisonChartData.svgHeight / 2" />
+                <line :x1="comparisonChartData.padding" :y1="comparisonChartData.svgHeight" :x2="comparisonChartData.svgWidth" :y2="comparisonChartData.svgHeight" />
+              </g>
+              <rect v-for="(bar, i) in comparisonChartData.currentBars" :key="'c'+i"
+                :x="bar.x" :y="bar.y" :width="bar.width" :height="bar.height"
+                fill="#22d3ee" fill-opacity="0.7" rx="1"
+              />
+              <rect v-for="(bar, i) in comparisonChartData.prevBars" :key="'p'+i"
+                :x="bar.x" :y="bar.y" :width="bar.width" :height="bar.height"
+                fill="#6b7280" fill-opacity="0.5" rx="1"
+              />
+              <g font-size="9" fill="#6b7280">
+                <text x="10" y="10" fill="#22d3ee">本期</text>
+                <text x="10" y="22" fill="#6b7280">上期</text>
+              </g>
+            </svg>
           </div>
         </div>
       </div>
