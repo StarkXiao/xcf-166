@@ -20,6 +20,26 @@ export const RED_DOT_PRIORITY_ORDER: Record<RedDotPriority, number> = {
   low: 3,
 }
 
+export const RED_DOT_READABLE_CATEGORIES: Set<RedDotCategory> = new Set([
+  'achievement_notification',
+  'friend_notification',
+  'mail_unread',
+])
+
+export const RED_DOT_CATEGORY_SORT_ORDER: Record<RedDotCategory, number> = {
+  friend_help_request: 0,
+  achievement_reward: 1,
+  friend_invite: 2,
+  friend_task_reward: 3,
+  mail_attachment: 4,
+  season_task: 5,
+  achievement_notification: 6,
+  friend_notification: 7,
+  mail_unread: 8,
+  shop_new: 9,
+  custom: 10,
+}
+
 export interface RedDotItem {
   id: string
   category: RedDotCategory
@@ -59,12 +79,12 @@ export interface RedDotSaveData {
   version: string
   timestamp: number
   playerId: string
-  readIds: string[]
-  dismissedIds: string[]
+  customReadIds: string[]
+  dismissedSnapshots: [string, number][]
 }
 
 export const RED_DOT_STORAGE_KEY = 'red_dot_system_data'
-export const RED_DOT_STORAGE_VERSION = '1.0'
+export const RED_DOT_STORAGE_VERSION = '2.0'
 
 export const RED_DOT_CATEGORY_LABELS: Record<RedDotCategory, string> = {
   achievement_reward: '成就奖励',

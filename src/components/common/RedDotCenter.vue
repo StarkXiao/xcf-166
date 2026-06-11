@@ -6,6 +6,7 @@ import {
   RED_DOT_CATEGORY_LABELS,
   RED_DOT_CATEGORY_COLORS,
   RED_DOT_PRIORITY_ORDER,
+  RED_DOT_READABLE_CATEGORIES,
 } from '@/types/redDot'
 import RedDotBadge from './RedDotBadge.vue'
 import {
@@ -61,6 +62,17 @@ const filteredItems = computed(() => {
   }
   return items
 })
+
+const canMarkCategoryAsRead = computed(() => {
+  if (filterCategory.value === 'all') {
+    return redDotStore.allItems.some(i => RED_DOT_READABLE_CATEGORIES.has(i.category) && !i.isRead)
+  }
+  return RED_DOT_READABLE_CATEGORIES.has(filterCategory.value)
+})
+
+function isItemReadable(category: RedDotCategory): boolean {
+  return RED_DOT_READABLE_CATEGORIES.has(category)
+}
 
 const priorityIcon: Record<RedDotPriority, any> = {
   urgent: AlertCircle,
@@ -177,6 +189,7 @@ function handleDismiss(itemId: string) {
           </span>
           <div class="flex gap-2">
             <button
+              v-if="canMarkCategoryAsRead"
               @click="handleMarkCategoryAsRead"
               class="flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
             >
@@ -239,7 +252,7 @@ function handleDismiss(itemId: string) {
 
                 <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
-                    v-if="!item.isRead"
+                    v-if="!item.isRead && isItemReadable(item.category)"
                     @click.stop="handleMarkAsRead(item.id)"
                     class="p-1.5 rounded hover:bg-gray-700 text-gray-400 hover:text-blue-400 transition-colors"
                     title="标记已读"

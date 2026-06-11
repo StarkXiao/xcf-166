@@ -1,6 +1,7 @@
 import { computed } from 'vue'
 import { useRedDotStore } from '@/stores/redDotStore'
 import type { RedDotCategory, RedDotPriority } from '@/types/redDot'
+import { RED_DOT_PRIORITY_ORDER } from '@/types/redDot'
 
 export function useRedDot() {
   const redDotStore = useRedDotStore()
@@ -22,16 +23,15 @@ export function useRedDot() {
   function getMultiCategoryHighestPriority(
     categories: RedDotCategory[]
   ): RedDotPriority | null {
-    let highest: RedDotPriority | null = null
-    categories.forEach(cat => {
-      const items = unreadItems.value.filter(i => i.category === cat)
-      items.forEach(item => {
-        if (!highest || item.priority < highest) {
-          highest = item.priority
-        }
-      })
-    })
-    return highest
+    const categorySet = new Set(categories)
+    const items = unreadItems.value.filter(i => categorySet.has(i.category))
+    if (items.length === 0) return null
+
+    return items.reduce<RedDotPriority>((highest, item) => {
+      return RED_DOT_PRIORITY_ORDER[item.priority] < RED_DOT_PRIORITY_ORDER[highest]
+        ? item.priority
+        : highest
+    }, items[0].priority)
   }
 
   function markCategoryAsRead(category: RedDotCategory) {
