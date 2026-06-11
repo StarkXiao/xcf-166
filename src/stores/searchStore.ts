@@ -12,6 +12,8 @@ import { dungeons } from '@/game/data/dungeons'
 import { getInitialShopItems } from '@/game/data/shopItems'
 import { getAllCharacters } from '@/game/data/characters'
 import { getTasksBySeasonId } from '@/game/data/seasonTasks'
+import { weeklyTasks } from '@/game/data/weeklyTasks'
+import { growthTasks } from '@/game/data/growthTasks'
 import type { AchievementCategory } from '@/types/achievement'
 import type { ItemCategory } from '@/types/shop'
 
@@ -179,9 +181,6 @@ function buildSearchIndex(): SearchItem[] {
     if (seasonStore.currentSeason) {
       const tasks = getTasksBySeasonId(seasonStore.currentSeason.id)
       tasks.forEach(task => {
-        let tab = 'tasks'
-        if (task.type === 'weekly') tab = 'weekly_tasks'
-        if (task.type === 'growth') tab = 'growth_tasks'
         items.push({
           id: `task_${task.id}`,
           title: task.title,
@@ -190,14 +189,52 @@ function buildSearchIndex(): SearchItem[] {
           icon: '📋',
           route: '/season',
           routeQuery: {
-            tab,
+            tab: 'tasks',
             id: task.id,
           },
           targetId: task.id,
-          keywords: [task.title, task.description, task.type, '任务'],
+          keywords: [task.title, task.description, task.type, '赛季', '任务'],
         })
       })
     }
+  } catch {}
+
+  try {
+    weeklyTasks.forEach(task => {
+      items.push({
+        id: `weekly_${task.id}`,
+        title: task.title,
+        description: task.description,
+        category: 'task',
+        icon: '📅',
+        route: '/season',
+        routeQuery: {
+          tab: 'weekly_tasks',
+          id: task.id,
+        },
+        targetId: task.id,
+        keywords: [task.title, task.description, task.difficulty, '周常', '每周', '任务'],
+      })
+    })
+  } catch {}
+
+  try {
+    growthTasks.forEach(task => {
+      items.push({
+        id: `growth_${task.id}`,
+        title: task.title,
+        description: task.description,
+        category: 'task',
+        icon: '📈',
+        route: '/season',
+        routeQuery: {
+          tab: 'growth_tasks',
+          id: task.id,
+        },
+        targetId: task.id,
+        keywords: [task.title, task.description, task.category, '成长', '任务'],
+      })
+    })
   } catch {}
 
   return items
