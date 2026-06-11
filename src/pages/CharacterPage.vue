@@ -6,6 +6,7 @@ import { useGameStore } from '@/stores/gameStore'
 import { useAchievementStore } from '@/stores/achievementStore'
 import { useSeasonStore } from '@/stores/seasonStore'
 import { useShopStore } from '@/stores/shopStore'
+import { useSearchStore } from '@/stores/searchStore'
 import { audioManager } from '@/game/audio'
 import type { Character, CharacterSkill } from '@/game/characterTypes'
 import { synergyRules } from '@/game/data/synergies'
@@ -20,6 +21,7 @@ const gameStore = useGameStore()
 const achievementStore = useAchievementStore()
 const seasonStore = useSeasonStore()
 const shopStore = useShopStore()
+const searchStore = useSearchStore()
 
 const selectedCharacterId = ref<string | null>(characterStore.activeCharacterId)
 const showLevelUpAnimation = ref(false)
@@ -66,7 +68,7 @@ function applyRouteParams() {
   }
 }
 
-watch(() => route.query, () => {
+watch([() => route.query, () => searchStore.navigationTick], () => {
   applyRouteParams()
 })
 

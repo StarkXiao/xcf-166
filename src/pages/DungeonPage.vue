@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDungeonStore } from '@/stores/dungeonStore'
+import { useSearchStore } from '@/stores/searchStore'
 import type { BattleRecord, BattleReward } from '@/types/dungeon'
 import DungeonList from '@/components/dungeon/DungeonList.vue'
 import StageMap from '@/components/dungeon/StageMap.vue'
@@ -14,6 +15,7 @@ import { Swords, Map, BarChart3, ArrowLeft } from 'lucide-vue-next'
 const route = useRoute()
 const router = useRouter()
 const dungeonStore = useDungeonStore()
+const searchStore = useSearchStore()
 
 type ViewMode = 'list' | 'stages' | 'battle' | 'result' | 'replay' | 'stats'
 
@@ -31,10 +33,11 @@ const tabs = [
   { id: 'stats' as const, name: '挑战统计', icon: BarChart3 },
 ]
 
-onMounted(() => {
-  dungeonStore.initDungeon()
+function applyRouteParams() {
   const tab = route.query.tab as string
   if (tab === 'stats') activeTab.value = 'stats'
+  else activeTab.value = 'list'
+
   const dungeon = route.query.dungeon as string
   const stage = route.query.stage as string
   if (dungeon) {
@@ -42,18 +45,30 @@ onMounted(() => {
     viewMode.value = stage ? 'battle' : 'stages'
     selectedStageId.value = stage || null
     nextTick(() => {
-      highlightedDungeonId.value = dungeon
-      setTimeout(() => {
-        const el = document.querySelector(`[data-dungeon-id="${dungeon}"]`)
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        }
-      }, 200)
-      setTimeout(() => {
-        highlightedDungeonId.value = null
-      }, 3000)
+      highlightedDungeonId.value = null
+      requestAnimationFrame(() => {
+        highlightedDungeonId.value = dungeon
+        setTimeout(() => {
+          const el = document.querySelector(`[data-dungeon-id="${dungeon}"]`)
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          }
+        }, 200)
+        setTimeout(() => {
+          highlightedDungeonId.value = null
+        }, 3000)
+      })
     })
   }
+}
+
+onMounted(() => {
+  dungeonStore.initDungeon()
+  applyRouteParams()
+})
+
+watch([() => route.query, () => searchStore.navigationTick], () => {
+  applyRouteParams()
 })
 
 function handleSelectDungeon(dungeonId: string) {

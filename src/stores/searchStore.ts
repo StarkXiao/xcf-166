@@ -227,6 +227,7 @@ export const useSearchStore = defineStore('search', () => {
   const searchIndex = ref<SearchItem[]>([])
   const selectedIndex = ref(0)
   const searchHistory = ref<string[]>([])
+  const navigationTick = ref(0)
 
   const categorizedResults = computed(() => {
     const q = query.value.trim()
@@ -366,6 +367,7 @@ export const useSearchStore = defineStore('search', () => {
     searchIndex,
     selectedIndex,
     searchHistory,
+    navigationTick,
     categorizedResults,
     totalResultCount,
     flatResults,

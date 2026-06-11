@@ -5,6 +5,7 @@ import { useSeasonStore } from '@/stores/seasonStore'
 import { useTaskStore } from '@/stores/taskStore'
 import { useActivityStore } from '@/stores/activityStore'
 import { useCharacterStore } from '@/stores/characterStore'
+import { useSearchStore } from '@/stores/searchStore'
 import { getGrowthTasksByCategory } from '@/game/data/growthTasks'
 import { Trophy, ListTodo, TrendingUp, Gift, ArrowLeft, Calendar, Target, Star } from 'lucide-vue-next'
 import SeasonCenter from '@/components/season/SeasonCenter.vue'
@@ -22,6 +23,7 @@ const seasonStore = useSeasonStore()
 const taskStore = useTaskStore()
 const activityStore = useActivityStore()
 const characterStore = useCharacterStore()
+const searchStore = useSearchStore()
 
 const activeTab = ref('center')
 const highlightedTaskId = ref<string | null>(null)
@@ -82,7 +84,7 @@ onMounted(() => {
   })
 })
 
-watch(() => route.query, () => {
+watch([() => route.query, () => searchStore.navigationTick], () => {
   applyRouteParams()
 })
 

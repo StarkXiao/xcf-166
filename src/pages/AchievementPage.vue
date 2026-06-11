@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAchievementStore } from '@/stores/achievementStore'
 import { useSeasonStore } from '@/stores/seasonStore'
 import { useCharacterStore } from '@/stores/characterStore'
+import { useSearchStore } from '@/stores/searchStore'
 import { audioManager } from '@/game/audio'
 import AchievementCard from '@/components/achievement/AchievementCard.vue'
 import BadgeDisplay from '@/components/achievement/BadgeDisplay.vue'
@@ -28,6 +29,7 @@ const route = useRoute()
 const achievementStore = useAchievementStore()
 const seasonStore = useSeasonStore()
 const characterStore = useCharacterStore()
+const searchStore = useSearchStore()
 
 const activeTab = ref<AchievementCategory | 'all'>('all')
 const showClaimAnimation = ref(false)
@@ -151,7 +153,7 @@ function applyRouteParams() {
   }
 }
 
-watch(() => route.query, () => {
+watch([() => route.query, () => searchStore.navigationTick], () => {
   applyRouteParams()
 })
 </script>

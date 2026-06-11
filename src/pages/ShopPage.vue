@@ -3,6 +3,7 @@ import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useShopStore } from '../stores/shopStore'
 import { useGameStore } from '../stores/gameStore'
+import { useSearchStore } from '../stores/searchStore'
 import type { ShopItem, ItemCategory } from '../types/shop'
 import { categoryNames } from '../game/data/shopItems'
 import ShopItemCard from '../components/shop/ShopItemCard.vue'
@@ -27,6 +28,7 @@ import {
 const route = useRoute()
 const shopStore = useShopStore()
 const gameStore = useGameStore()
+const searchStore = useSearchStore()
 
 type TabType = 'shop' | 'orders' | 'inventory'
 const activeTab = ref<TabType>('shop')
@@ -129,7 +131,7 @@ onMounted(() => {
   applyRouteParams()
 })
 
-watch(() => route.query, () => {
+watch([() => route.query, () => searchStore.navigationTick], () => {
   applyRouteParams()
 })
 </script>
